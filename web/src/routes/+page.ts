@@ -19,7 +19,7 @@ export const load = (async ({ fetch }) => {
 
     await authManager.load();
     if (authManager.authenticated) {
-      redirect(307, Route.photos());
+      redirect(307, Route.home());
     }
 
     if (serverConfigManager.value.isInitialized) {

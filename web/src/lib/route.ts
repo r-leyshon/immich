@@ -72,6 +72,9 @@ export const Route = {
   // maintenance
   maintenanceMode: (params?: { continue?: string }) => '/maintenance' + asQueryString(params),
 
+  // landing
+  home: () => '/map',
+
   // map
   map: (point?: { zoom: number; lat: number; lng: number }) =>
     '/map' + (point ? `#${point.zoom}/${point.lat}/${point.lng}` : ''),

@@ -8,7 +8,7 @@ import type { PageLoad } from './$types';
 export const load = (async ({ url }) => {
   await authenticate(url);
   if (!authManager.user.shouldChangePassword) {
-    redirect(307, Route.photos());
+    redirect(307, Route.home());
   }
 
   const $t = await getFormatter();

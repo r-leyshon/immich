@@ -95,20 +95,30 @@
     autoFitBounds = true,
   }: Props = $props();
 
-  // Calculate initial bounds from markers once during initialization
+  const boundsFromMarkers = (markers: MapMarkerResponseDto[]) => {
+    const bounds = new LngLatBounds();
+    for (const marker of markers) {
+      bounds.extend([marker.lon, marker.lat]);
+    }
+    return bounds;
+  };
+
+  // Preloaded markers (album modal) can fit on first paint. The main /map page
+  // loads markers asynchronously, so it also fits in the $effect below.
   const initialBounds = (() => {
     if (!autoFitBounds || center || zoom !== undefined || !mapMarkers || mapMarkers.length === 0) {
       return undefined;
     }
 
-    const bounds = new LngLatBounds();
-    for (const marker of mapMarkers) {
-      bounds.extend([marker.lon, marker.lat]);
-    }
-    return bounds;
+    return boundsFromMarkers(mapMarkers);
   })();
 
+  // Capture before MapLibre writes its own hash from the default camera.
+  const hasUrlCamera =
+    hash && typeof location !== 'undefined' && /#([\d.eE+-]+)\/(-?[\d.eE+-]+)\/(-?[\d.eE+-]+)/.test(location.hash);
+
   let map: Map | undefined = $state();
+  let fittedForMarkers: MapMarkerResponseDto[] | undefined;
   let marker: Marker | null = null;
   let abortController: AbortController;
 
@@ -333,6 +343,22 @@
     }
 
     untrack(() => map?.jumpTo({ center, zoom }));
+  });
+
+  $effect(() => {
+    const ready = map;
+    const markers = mapMarkers;
+    if (!ready || !autoFitBounds || center || zoom !== undefined || hasUrlCamera) {
+      return;
+    }
+    if (!markers?.length || fittedForMarkers === markers) {
+      return;
+    }
+
+    untrack(() => {
+      ready.fitBounds(boundsFromMarkers(markers), { padding: 50, maxZoom: 15, duration: 600 });
+      fittedForMarkers = markers;
+    });
   });
 
   const handleViewportSelect = () => {

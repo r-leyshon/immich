@@ -40,14 +40,14 @@
 </script>
 
 <Sidebar ariaLabel={$t('primary')}>
+  {#if featureFlagsManager.value.map}
+    <NavbarItem title={$t('map')} href={Route.map()} icon={mdiMapOutline} activeIcon={mdiMap} />
+  {/if}
+
   <NavbarItem title={$t('photos')} href={Route.photos()} icon={mdiImageMultipleOutline} activeIcon={mdiImageMultiple} />
 
   {#if featureFlagsManager.value.search}
     <NavbarItem title={$t('explore')} href={Route.explore()} icon={mdiMagnify} />
-  {/if}
-
-  {#if featureFlagsManager.value.map}
-    <NavbarItem title={$t('map')} href={Route.map()} icon={mdiMapOutline} activeIcon={mdiMap} />
   {/if}
 
   {#if authManager.preferences.memories.enabled && authManager.preferences.memories.sidebarWeb}
