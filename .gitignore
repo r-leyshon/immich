@@ -1,5 +1,6 @@
 .env
 **/node_modules/**
+client_secret_*.json
 
 .DS_Store
 .vscode/*

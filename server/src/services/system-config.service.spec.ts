@@ -157,6 +157,7 @@ const updatedConfig = Object.freeze<SystemConfig>({
     accountManagementUrl: '',
     autoLaunch: true,
     autoRegister: true,
+    allowedEmails: [],
     buttonText: 'Login with OAuth',
     clientId: '',
     clientSecret: '',

@@ -279,6 +279,10 @@ const AdminConfigSchemaWithVisibility = z
       .object({
         autoLaunch: configBool.describe('Auto launch').meta({ visibility: Public }),
         autoRegister: configBool.describe('Auto register'),
+        allowedEmails: z
+          .array(z.email())
+          .default([])
+          .describe('If non-empty, only these emails may complete OAuth login'),
         buttonText: z.string().describe('Button text').meta({ visibility: Public }),
         clientId: z.string().describe('Client ID'),
         clientSecret: z.string().describe('Client secret'),
@@ -663,6 +667,7 @@ export const defaults = Object.freeze<SystemConfig>({
   oauth: {
     autoLaunch: false,
     autoRegister: true,
+    allowedEmails: [],
     buttonText: 'Login with OAuth',
     clientId: '',
     clientSecret: '',

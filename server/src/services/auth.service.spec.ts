@@ -815,6 +815,47 @@ describe(AuthService.name, () => {
       expect(mocks.user.create).toHaveBeenCalledTimes(1);
     });
 
+    it('should reject OAuth login when the email is not on the allowlist', async () => {
+      mocks.systemMetadata.get.mockResolvedValue({
+        oauth: { enabled: true, autoRegister: true, allowedEmails: ['family@gmail.com'] },
+      });
+      mocks.oauth.getProfileAndOAuthSid.mockResolvedValue({
+        profile: OAuthProfileFactory.create({ email: 'stranger@gmail.com' }),
+      });
+
+      await expect(
+        sut.callback(
+          { url: 'http://immich/auth/login?code=abc123', state: 'xyz789', codeVerifier: 'foobar' },
+          {},
+          loginDetails,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mocks.user.create).not.toHaveBeenCalled();
+      expect(mocks.user.getByOAuthId).not.toHaveBeenCalled();
+    });
+
+    it('should allow OAuth login when the email is on the allowlist', async () => {
+      mocks.systemMetadata.get.mockResolvedValue({
+        oauth: { enabled: true, autoRegister: true, allowedEmails: ['family@gmail.com'] },
+      });
+      mocks.user.getByEmail.mockResolvedValue(void 0);
+      mocks.user.getAdmin.mockResolvedValue(UserFactory.create({ isAdmin: true }));
+      mocks.user.create.mockResolvedValue(UserFactory.create({ oauthId: 'oauth-id' }));
+      mocks.oauth.getProfileAndOAuthSid.mockResolvedValue({
+        profile: OAuthProfileFactory.create({ email: 'Family@Gmail.com' }),
+      });
+      mocks.session.create.mockResolvedValue(SessionFactory.create());
+
+      await sut.callback(
+        { url: 'http://immich/auth/login?code=abc123', state: 'xyz789', codeVerifier: 'foobar' },
+        {},
+        loginDetails,
+      );
+
+      expect(mocks.user.create).toHaveBeenCalledTimes(1);
+    });
+
     it('should throw an error if user should be auto registered but the email claim does not exist', async () => {
       mocks.systemMetadata.get.mockResolvedValue(systemConfigStub.enabled);
       mocks.user.getByEmail.mockResolvedValue(void 0);

@@ -305,7 +305,12 @@ export class AuthService extends BaseService {
       idToken: oauthBearerToken,
     } = await this.oauthRepository.getProfileAndOAuthSid(oauth, url, expectedState, codeVerifier);
     const normalizedEmail = profile.email ? profile.email.trim().toLowerCase() : undefined;
-    const { autoRegister, defaultStorageQuota, storageLabelClaim, storageQuotaClaim, roleClaim } = oauth;
+    const { autoRegister, allowedEmails, defaultStorageQuota, storageLabelClaim, storageQuotaClaim, roleClaim } = oauth;
+    const allowlist = (allowedEmails ?? []).map((email) => email.trim().toLowerCase()).filter(Boolean);
+    if (allowlist.length > 0 && (!normalizedEmail || !allowlist.includes(normalizedEmail))) {
+      this.logger.warn(`OAuth login rejected: ${normalizedEmail || '(no email)'} is not on the allowlist`);
+      throw new BadRequestException('OAuth authentication failed');
+    }
     this.logger.debug(`Logging in with OAuth: ${JSON.stringify(profile)}`);
     let user: UserAdmin | undefined = await this.userRepository.getByOAuthId(profile.sub);
 

@@ -300,6 +300,8 @@
     "oauth_allow_insecure_requests_description": "WARNING: This disables TLS certificate validation for OAuth requests and may expose you to MITM attacks.",
     "oauth_auto_launch": "Auto launch",
     "oauth_auto_launch_description": "Start the OAuth login flow automatically upon navigating to the login page",
+    "oauth_allowed_emails": "Allowed emails",
+    "oauth_allowed_emails_description": "If set, only these email addresses can sign in with OAuth. Separate with commas.",
     "oauth_auto_register": "Auto register",
     "oauth_auto_register_description": "Automatically register new users after signing in with OAuth",
     "oauth_button_text": "Button text",
