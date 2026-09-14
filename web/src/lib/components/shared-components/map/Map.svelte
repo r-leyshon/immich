@@ -375,20 +375,12 @@
     }
 
     untrack(() => {
-      if (displayPhotoMarkers) {
-        ready.fitBounds(boundsFromMarkers(markers), { padding: 50, maxZoom: 15, duration: 600 });
-      } else {
-        const box = bboxFromFeatures(visitedRegions.visitedFeatures);
-        if (box) {
-          ready.fitBounds(
-            [
-              [box.west, box.south],
-              [box.east, box.north],
-            ],
-            { padding: 48, maxZoom: 8, duration: 600 },
-          );
-        }
-      }
+      // Fit the photo GPS, not country envelopes (Mexico/England/etc. are huge).
+      ready.fitBounds(boundsFromMarkers(markers), {
+        padding: 56,
+        maxZoom: displayPhotoMarkers ? 15 : 10,
+        duration: 600,
+      });
       fittedForMarkers = markers;
     });
   });
