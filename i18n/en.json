@@ -2054,6 +2054,8 @@
   "show_or_hide_info": "Show or hide info",
   "show_password": "Show password",
   "show_person_options": "Show person options",
+  "show_photo_markers": "Show photo locations",
+  "hide_photo_markers": "Hide photo locations",
   "show_photos_in_area": "Show photos in this area",
   "show_progress_bar": "Show Progress Bar",
   "show_schema": "Show schema",

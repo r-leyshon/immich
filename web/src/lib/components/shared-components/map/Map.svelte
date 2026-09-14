@@ -18,9 +18,10 @@
   import MapSettingsModal from '$lib/modals/MapSettingsModal.svelte';
   import { mapSettings } from '$lib/stores/preferences.store';
   import { getAssetMediaUrl, handlePromiseError } from '$lib/utils';
+  import { bboxFromFeatures, regionById, visitedFromMarkers } from '$lib/utils/visited-regions';
   import { getMapMarkers, type MapMarkerResponseDto } from '@immich/sdk';
   import { Alert, Container, Icon, modalManager, Text, Theme, themeManager } from '@immich/ui';
-  import { mdiCog, mdiImageMultiple, mdiMap, mdiMapMarker } from '@mdi/js';
+  import { mdiCog, mdiImageMultiple, mdiMap, mdiMapMarker, mdiMapMarkerOff } from '@mdi/js';
   import type { Feature, GeoJsonProperties, Geometry, Point } from 'geojson';
   import { isEqual, omit } from 'lodash-es';
   import { DateTime, Duration } from 'luxon';
@@ -41,8 +42,10 @@
     Control,
     ControlButton,
     ControlGroup,
+    FillLayer,
     GeoJSON,
     GeolocateControl,
+    LineLayer,
     MapLibre,
     MarkerLayer,
     NavigationControl,
@@ -122,6 +125,16 @@
   let marker: Marker | null = null;
   let abortController: AbortController;
 
+  const displayPhotoMarkers = $derived(
+    simplified || clickable || useLocationPin || !showSettings || $mapSettings.showPhotoMarkers,
+  );
+  const showVisitedRegions = $derived(!clickable);
+
+  const visitedRegions = $derived(visitedFromMarkers(mapMarkers ?? []));
+  const visitedRegionData = $derived({
+    type: 'FeatureCollection' as const,
+    features: visitedRegions.visitedFeatures,
+  });
   const mapTheme = $derived($mapSettings.allowDarkMode ? themeManager.value : Theme.Light);
   const styleUrl = $derived(
     mapTheme === Theme.Dark ? serverConfigManager.value.mapDarkStyleUrl : serverConfigManager.value.mapLightStyleUrl,
@@ -268,7 +281,10 @@
   const handleSettingsClick = async () => {
     const settings = await modalManager.show(MapSettingsModal);
     if (settings) {
-      const shouldUpdate = !isEqual(omit(settings, 'allowDarkMode'), omit($mapSettings, 'allowDarkMode'));
+      const shouldUpdate = !isEqual(
+        omit(settings, 'allowDarkMode', 'showPhotoMarkers'),
+        omit($mapSettings, 'allowDarkMode', 'showPhotoMarkers'),
+      );
       $mapSettings = settings;
 
       if (shouldUpdate) {
@@ -316,12 +332,15 @@
         if (previousStyle) {
           // Preserves the custom map markers from the previous style when the theme is switched
           // Required until https://github.com/dimfeld/svelte-maplibre/issues/146 is fixed
-          const customLayers = previousStyle.layers.filter((l) => l.type === 'fill' && l.source === 'geojson');
+          const customLayers = previousStyle.layers.filter((layer) => {
+            const source = 'source' in layer ? layer.source : undefined;
+            return source === 'geojson' || source === 'visited-regions';
+          });
           const layers = nextStyle.layers.concat(customLayers);
           const sources = nextStyle.sources;
 
           for (const [key, value] of Object.entries(previousStyle.sources || {})) {
-            if (key.startsWith('geojson')) {
+            if (key.startsWith('geojson') || key === 'visited-regions') {
               sources[key] = value;
             }
           }
@@ -356,7 +375,20 @@
     }
 
     untrack(() => {
-      ready.fitBounds(boundsFromMarkers(markers), { padding: 50, maxZoom: 15, duration: 600 });
+      if (displayPhotoMarkers) {
+        ready.fitBounds(boundsFromMarkers(markers), { padding: 50, maxZoom: 15, duration: 600 });
+      } else {
+        const box = bboxFromFeatures(visitedRegions.visitedFeatures);
+        if (box) {
+          ready.fitBounds(
+            [
+              [box.west, box.south],
+              [box.east, box.north],
+            ],
+            { padding: 48, maxZoom: 8, duration: 600 },
+          );
+        }
+      }
       fittedForMarkers = markers;
     });
   });
@@ -388,6 +420,54 @@
     if (viewportGridActive && !assetViewerManager.isViewing) {
       handleViewportSelect();
     }
+  };
+
+  const fitToRegion = (regionId: string) => {
+    const feature = regionById.get(regionId);
+    if (!map || !feature) {
+      return;
+    }
+    const box = bboxFromFeatures([feature]);
+    if (!box) {
+      return;
+    }
+    map.fitBounds(
+      [
+        [box.west, box.south],
+        [box.east, box.north],
+      ],
+      { padding: 48, maxZoom: 8, duration: 500 },
+    );
+  };
+
+  const handleRegionClick = (event: { feature?: Feature; features?: Feature[] }) => {
+    if (clickable) {
+      return;
+    }
+    const regionId = (event.feature ?? event.features?.[0])?.properties?.id as string | undefined;
+    if (!regionId) {
+      return;
+    }
+
+    fitToRegion(regionId);
+
+    const assetIds = visitedRegions.assetsByRegion.get(regionId);
+    if (!onClusterSelect || !assetIds?.length) {
+      return;
+    }
+
+    const feature = regionById.get(regionId);
+    const box = feature ? bboxFromFeatures([feature]) : undefined;
+    onClusterSelect(assetIds, {
+      west: box?.west ?? -180,
+      south: box?.south ?? -90,
+      east: box?.east ?? 180,
+      north: box?.north ?? 90,
+    });
+  };
+
+  const togglePhotoMarkers = () => {
+    $mapSettings = { ...$mapSettings, showPhotoMarkers: !$mapSettings.showPhotoMarkers };
   };
 
   const onAssetsChanged = async () => {
@@ -441,6 +521,18 @@
       {#if showSettings}
         <Control>
           <ControlGroup>
+            <ControlButton onclick={togglePhotoMarkers}>
+              <Icon
+                title={$mapSettings.showPhotoMarkers ? $t('hide_photo_markers') : $t('show_photo_markers')}
+                icon={$mapSettings.showPhotoMarkers ? mdiMapMarker : mdiMapMarkerOff}
+                size="70%"
+                class="text-black/80"
+              />
+            </ControlButton>
+          </ControlGroup>
+        </Control>
+        <Control>
+          <ControlGroup>
             <ControlButton onclick={handleSettingsClick}>
               <Icon icon={mdiCog} size="70%" class="text-black/80" />
             </ControlButton>
@@ -458,10 +550,31 @@
         </Control>
       {/if}
 
+      {#if showVisitedRegions}
+        <GeoJSON id="visited-regions" data={visitedRegionData} generateId>
+          <FillLayer
+            hoverCursor="pointer"
+            paint={{
+              'fill-color': '#c9a227',
+              'fill-opacity': 0.72,
+            }}
+            onclick={handleRegionClick}
+          />
+          <LineLayer
+            interactive={false}
+            paint={{
+              'line-color': '#8a6d1f',
+              'line-width': 1.2,
+              'line-opacity': 0.9,
+            }}
+          />
+        </GeoJSON>
+      {/if}
+
       <GeoJSON
         data={{
           type: 'FeatureCollection',
-          features: mapMarkers?.map((marker) => asFeature(marker)) ?? [],
+          features: displayPhotoMarkers ? (mapMarkers?.map((marker) => asFeature(marker)) ?? []) : [],
         }}
         id="geojson"
         cluster={{ radius: 35, maxZoom: 18 }}

@@ -39,6 +39,9 @@
     <Field label={$t('show_asset_panel_on_map')}>
       <Switch bind:checked={settings.showAssetPanel} />
     </Field>
+    <Field label={$t('show_photo_markers')}>
+      <Switch bind:checked={settings.showPhotoMarkers} />
+    </Field>
 
     {#if customDateRange}
       <div in:fly={{ y: 10, duration: 200 }} class="flex flex-col gap-4">

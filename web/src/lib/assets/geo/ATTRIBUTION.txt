@@ -1,0 +1,11 @@
+Country outlines: Natural Earth 50m admin-0, public domain.
+110m drops inhabited islands such as Kos; 50m keeps them in the country polygon.
+https://www.naturalearthdata.com/
+
+US states and DC: PublicaMundi / US Census cartographic boundaries.
+https://github.com/PublicaMundi/MappingAPI
+
+UK nations: Office for National Statistics, Countries (December 2023) Boundaries UK BGC.
+Contains OS data © Crown copyright and database right.
+Licensed under the Open Government Licence v3.0.
+https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/

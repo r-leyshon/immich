@@ -26,6 +26,7 @@ export interface MapSettings {
   withPartners: boolean;
   withSharedAlbums: boolean;
   showAssetPanel: boolean;
+  showPhotoMarkers: boolean;
   relativeDate: string;
   dateAfter?: string;
   dateBefore?: string;
@@ -38,6 +39,7 @@ const defaultMapSettings = {
   withPartners: false,
   withSharedAlbums: false,
   showAssetPanel: false,
+  showPhotoMarkers: false,
   relativeDate: '',
 };
 
