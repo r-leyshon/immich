@@ -1,4 +1,10 @@
-import { AssetOrderBy, AssetVisibility, type AssetResponseDto, type TimeBucketAssetResponseDto } from '@immich/sdk';
+import {
+  AssetOrderBy,
+  AssetTypeEnum,
+  AssetVisibility,
+  type AssetResponseDto,
+  type TimeBucketAssetResponseDto,
+} from '@immich/sdk';
 import { tick } from 'svelte';
 import { sdkMock } from '$lib/__mocks__/sdk.mock';
 import { eventManager } from '$lib/managers/event-manager.svelte';
@@ -298,6 +304,53 @@ describe('TimelineManager', () => {
       expect(await getAssets(timelineManager)).toEqual([matching]);
     });
 
+    it('ignores document assets on the default photos timeline', async () => {
+      const photo = deriveLocalDateTimeFromFileCreatedAt(timelineAssetFactory.build({ isImage: true, isVideo: false }));
+      const document = deriveLocalDateTimeFromFileCreatedAt(
+        timelineAssetFactory.build({ isImage: false, isVideo: false }),
+      );
+
+      timelineManager.upsertAssets([photo, document]);
+
+      expect(await getAssets(timelineManager)).toEqual([photo]);
+    });
+
+    it('keeps document assets on the documents timeline', async () => {
+      await timelineManager.updateOptions({ visibility: AssetVisibility.Timeline, assetType: AssetTypeEnum.Other });
+
+      const photo = deriveLocalDateTimeFromFileCreatedAt(timelineAssetFactory.build({ isImage: true, isVideo: false }));
+      const document = deriveLocalDateTimeFromFileCreatedAt(
+        timelineAssetFactory.build({ isImage: false, isVideo: false }),
+      );
+
+      timelineManager.upsertAssets([photo, document]);
+
+      expect(await getAssets(timelineManager)).toEqual([document]);
+    });
+
+    it('keeps documents loaded from time buckets on the documents timeline', async () => {
+      const document = deriveLocalDateTimeFromFileCreatedAt(
+        timelineAssetFactory.build({
+          isImage: false,
+          isVideo: false,
+          fileCreatedAt: fromISODateTimeUTCToObject('2024-03-01T00:00:00.000Z'),
+        }),
+      );
+
+      sdkMock.getTimeBuckets.mockResolvedValue([{ count: 1, timeBucket: '2024-03-01T00:00:00.000Z' }]);
+      sdkMock.getTimeBucket.mockResolvedValue(toResponseDto(document));
+
+      const documentsTimeline = new TimelineManager();
+      await documentsTimeline.updateOptions({ visibility: AssetVisibility.Timeline, assetType: AssetTypeEnum.Other });
+      await documentsTimeline.updateViewport({ width: 1588, height: 1000 });
+      await tick();
+
+      const assets = await getAssets(documentsTimeline);
+      expect(assets).toHaveLength(1);
+      expect(assets[0].id).toEqual(document.id);
+      expect(assets[0].isVideo).toBe(false);
+    });
+
     // disabled due to the wasm Justified Layout import
     it('ignores trashed assets when isTrashed is true', async () => {
       const asset = deriveLocalDateTimeFromFileCreatedAt(timelineAssetFactory.build({ isTrashed: false }));
@@ -474,6 +527,7 @@ describe('TimelineManager', () => {
         assetFactory.build({
           id: existing.id,
           ownerId: existing.ownerId,
+          type: AssetTypeEnum.Image,
           isFavorite: true,
           isTrashed: existing.isTrashed,
           visibility: existing.visibility,

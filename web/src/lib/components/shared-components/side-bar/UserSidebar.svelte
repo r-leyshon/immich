@@ -16,6 +16,8 @@
     mdiArchiveArrowDownOutline,
     mdiCards,
     mdiCardsOutline,
+    mdiFileDocument,
+    mdiFileDocumentOutline,
     mdiFolderOutline,
     mdiHeart,
     mdiHeartOutline,
@@ -45,6 +47,13 @@
   {/if}
 
   <NavbarItem title={$t('photos')} href={Route.photos()} icon={mdiImageMultipleOutline} activeIcon={mdiImageMultiple} />
+
+  <NavbarItem
+    title={$t('documents')}
+    href={Route.documents()}
+    icon={mdiFileDocumentOutline}
+    activeIcon={mdiFileDocument}
+  />
 
   {#if featureFlagsManager.value.search}
     <NavbarItem title={$t('explore')} href={Route.explore()} icon={mdiMagnify} />

@@ -408,6 +408,54 @@ describe(MediaService.name, () => {
       expect(mocks.asset.update).not.toHaveBeenCalledWith();
     });
 
+    it('should generate thumbnails for document assets', async () => {
+      const asset = AssetFactory.from({
+        type: AssetType.Other,
+        originalFileName: 'Kos Road Trip Itinerary.html',
+        originalPath: '/data/upload/itinerary.html',
+      })
+        .exif()
+        .build();
+      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
+      mocks.storage.readFile.mockResolvedValue(
+        Buffer.from('<img src="data:image/png;base64,aGVsbG8gd29ybGQgcHJldmlldw==">'),
+      );
+      mocks.media.generateThumbhash.mockResolvedValue(Buffer.from('document-thumbhash'));
+
+      await expect(sut.handleGenerateThumbnails({ id: asset.id })).resolves.toEqual(JobStatus.Success);
+      expect(mocks.storage.readFile).toHaveBeenCalledWith(asset.originalPath);
+      expect(mocks.media.decodeImage).toHaveBeenCalledWith(expect.any(Buffer), expect.any(Object));
+      expect(mocks.media.generateThumbnail).toHaveBeenCalledTimes(2);
+    });
+
+    it('should generate document thumbnails after metadata extraction', async () => {
+      const asset = AssetFactory.from({
+        type: AssetType.Other,
+        originalFileName: 'Kos Road Trip Itinerary.html',
+        originalPath: '/data/upload/itinerary.html',
+      })
+        .exif()
+        .build();
+      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
+      mocks.storage.readFile.mockResolvedValue(Buffer.from('<title>Kos Road Trip Itinerary</title>'));
+      mocks.media.generateThumbhash.mockResolvedValue(Buffer.from('document-thumbhash'));
+
+      await sut.onAssetMetadataExtracted({ assetId: asset.id, userId: asset.ownerId });
+
+      expect(mocks.storage.readFile).toHaveBeenCalledWith(asset.originalPath);
+      expect(mocks.media.generateThumbnail).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not generate thumbnails from metadata events for photos', async () => {
+      const asset = AssetFactory.from().exif().build();
+      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
+
+      await sut.onAssetMetadataExtracted({ assetId: asset.id, userId: asset.ownerId });
+
+      expect(mocks.storage.readFile).not.toHaveBeenCalled();
+      expect(mocks.media.generateThumbnail).not.toHaveBeenCalled();
+    });
+
     it('should delete previous preview if different path', async () => {
       const asset = AssetFactory.from().file({ type: AssetFileType.Preview }).exif().build();
       mocks.systemMetadata.get.mockResolvedValue({ image: { thumbnail: { format: ImageFormat.Webp } } });

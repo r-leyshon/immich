@@ -7,6 +7,7 @@ import {
   mdiCog,
   mdiContentDuplicate,
   mdiCrosshairsGps,
+  mdiFileDocumentOutline,
   mdiFolderOutline,
   mdiHeartOutline,
   mdiImageAlbum,
@@ -80,6 +81,11 @@ export const getPagesProvider = ($t: MessageFormatter) => {
       title: $t('photos'),
       icon: mdiImageMultipleOutline,
       onAction: () => goto(Route.photos()),
+    },
+    {
+      title: $t('documents'),
+      icon: mdiFileDocumentOutline,
+      onAction: () => goto(Route.documents()),
     },
     {
       title: $t('explore'),

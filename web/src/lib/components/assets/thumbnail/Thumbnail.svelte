@@ -14,6 +14,7 @@
     mdiArchiveArrowDownOutline,
     mdiCameraBurst,
     mdiCheckCircle,
+    mdiFileDocumentOutline,
     mdiFileGifBox,
     mdiHeart,
     mdiMagnifyPlusOutline,
@@ -246,7 +247,12 @@
     >
       <ImageThumbnail
         class={['absolute group-focus-visible:rounded-lg', { 'rounded-xl': selected }, imageClass]}
-        brokenAssetClass={['z-1 absolute group-focus-visible:rounded-lg', selected && 'rounded-2xl', brokenAssetClass]}
+        brokenAssetClass={[
+          'z-1 absolute group-focus-visible:rounded-lg',
+          selected && 'rounded-2xl',
+          brokenAssetClass,
+          !asset.isImage && !asset.isVideo && 'hidden',
+        ]}
         url={getAssetMediaUrl({ id: asset.id, size: AssetMediaSize.Thumbnail, cacheKey: asset.thumbhash })}
         altText={$getAltText(asset)}
         widthStyle="{width}px"
@@ -259,6 +265,16 @@
           thumbError = errored;
         }}
       />
+      {#if !asset.isImage && !asset.isVideo && (!loaded || thumbError)}
+        <div
+          class={[
+            'absolute inset-0 z-1 flex flex-col items-center justify-center gap-2 bg-[#e8eef7] text-primary dark:bg-immich-dark-gray',
+            { 'rounded-xl': selected },
+          ]}
+        >
+          <Icon icon={mdiFileDocumentOutline} size="48" />
+        </div>
+      {/if}
       {#if asset.isVideo}
         <div class="pointer-events-none absolute size-full group-focus-visible:rounded-lg">
           <VideoThumbnail

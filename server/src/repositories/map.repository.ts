@@ -136,6 +136,8 @@ export class MapRepository {
       .orderBy('fileCreatedAt', 'desc')
       .select([
         'id',
+        'asset.originalFileName',
+        'asset.type',
         'asset_exif.latitude as lat',
         'asset_exif.longitude as lon',
         'asset_exif.city',
@@ -143,6 +145,65 @@ export class MapRepository {
         'asset_exif.country',
       ])
       .$narrowType<{ lat: NotNull; lon: NotNull }>();
+  }
+
+  async forwardGeocode(query: string): Promise<{
+    latitude: number;
+    longitude: number;
+    name: string;
+    city: string | null;
+    state: string | null;
+    country: string | null;
+  } | null> {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', query);
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('limit', '1');
+    url.searchParams.set('addressdetails', '1');
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'Accept-Language': 'en',
+          'User-Agent': 'Immich/3.2.0 (https://github.com/r-leyshon/immich)',
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) {
+        this.logger.warn(`Nominatim geocode failed for "${query}": ${response.status}`);
+        return null;
+      }
+
+      const results: unknown = await response.json();
+      if (!Array.isArray(results) || results.length === 0 || typeof results[0] !== 'object' || results[0] === null) {
+        return null;
+      }
+
+      const first = results[0] as {
+        lat?: string;
+        lon?: string;
+        name?: string;
+        address?: { city?: string; town?: string; village?: string; state?: string; country?: string };
+      };
+      const latitude = Number(first.lat);
+      const longitude = Number(first.lon);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return null;
+      }
+
+      return {
+        latitude,
+        longitude,
+        name: first.name || query,
+        city: first.address?.city ?? first.address?.town ?? first.address?.village ?? null,
+        state: first.address?.state ?? null,
+        country: first.address?.country ?? null,
+      };
+    } catch (error) {
+      this.logger.warn(`Nominatim geocode error for "${query}"`, error);
+      return null;
+    }
   }
 
   async reverseGeocode(point: GeoPoint): Promise<ReverseGeocodeResult> {

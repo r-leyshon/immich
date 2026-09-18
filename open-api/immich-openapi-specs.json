@@ -15859,6 +15859,15 @@
             }
           },
           {
+            "name": "assetType",
+            "required": false,
+            "in": "query",
+            "description": "Filter by asset type. When omitted, only images and videos are returned.",
+            "schema": {
+              "$ref": "#/components/schemas/AssetTypeEnum"
+            }
+          },
+          {
             "name": "bbox",
             "required": false,
             "in": "query",
@@ -16055,6 +16064,15 @@
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
               "type": "string"
+            }
+          },
+          {
+            "name": "assetType",
+            "required": false,
+            "in": "query",
+            "description": "Filter by asset type. When omitted, only images and videos are returned.",
+            "schema": {
+              "$ref": "#/components/schemas/AssetTypeEnum"
             }
           },
           {
@@ -19054,6 +19072,16 @@
           "allowInsecureRequests": {
             "description": "Allow insecure requests",
             "type": "boolean"
+          },
+          "allowedEmails": {
+            "default": [],
+            "description": "If non-empty, only these emails may complete OAuth login",
+            "items": {
+              "format": "email",
+              "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+              "type": "string"
+            },
+            "type": "array"
           },
           "autoLaunch": {
             "description": "Auto launch",
@@ -22894,9 +22922,17 @@
             "format": "double",
             "type": "number"
           },
+          "originalFileName": {
+            "description": "Original file name",
+            "type": "string"
+          },
           "state": {
             "description": "State/Province name",
             "nullable": true,
+            "type": "string"
+          },
+          "type": {
+            "description": "Asset type",
             "type": "string"
           }
         },

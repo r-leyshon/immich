@@ -130,7 +130,13 @@ const sidecar: Record<string, string[]> = {
   '.xmp': ['application/xml', 'text/xml'],
 };
 
-const types = { ...image, ...video, ...sidecar };
+const document: Record<string, string[]> = {
+  '.htm': ['text/html'],
+  '.html': ['text/html'],
+  '.md': ['text/markdown'],
+};
+
+const types = { ...image, ...video, ...sidecar, ...document };
 
 const isType = (filename: string, r: Record<string, string[]>) =>
   Object.hasOwn(r, getFilenameExtension(filename).toLowerCase());
@@ -148,12 +154,14 @@ export const mimeTypes = {
   image,
   profile,
   sidecar,
+  document,
   video,
   raw,
   webUnsupportedImage,
 
-  isAsset: (filename: string) => isType(filename, image) || isType(filename, video),
+  isAsset: (filename: string) => isType(filename, image) || isType(filename, video) || isType(filename, document),
   isImage: (filename: string) => isType(filename, image),
+  isDocument: (filename: string) => isType(filename, document),
   isWebSupportedImage: (filename: string) => isType(filename, webSupportedImage),
   isHeifImage: (filename: string) => isType(filename, heifImage),
   isPossiblyAnimatedImage: (filename: string) => isType(filename, possiblyAnimatedImage),
@@ -178,5 +186,5 @@ export const mimeTypes = {
 
     return AssetType.Other;
   },
-  getSupportedFileExtensions: () => [...Object.keys(image), ...Object.keys(video)],
+  getSupportedFileExtensions: () => [...Object.keys(image), ...Object.keys(video), ...Object.keys(document)],
 };

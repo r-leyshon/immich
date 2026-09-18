@@ -38,25 +38,24 @@ All the services are packaged to run with a single Docker Compose command.
 
 ### Server and web apps
 
+In this fork, run the server and web app on the host with **`mise host`**. Docker is only used for Postgres and Redis.
+
 1. Clone the project repo.
 2. Run `cp docker/example.env docker/.env`.
-3. Edit `docker/.env` to provide values for the required variable `UPLOAD_LOCATION`.
-4. Install dependencies - `mise x -- pnpm i`
-5. From the root directory, run:
+3. If port 5432 is already in use, this fork uses **5433** via `DB_PORT` in `docker/.env`.
+4. Start Docker Desktop, then from the root directory run:
 
 ```bash title="Start development server"
-mise dev
+mise host
 ```
 
-5. Access the dev instance in your browser at http://localhost:3000, or connect via the mobile app.
+5. Access the dev instance in your browser at http://localhost:3000. The API is at http://localhost:2283.
 
-All the services will be started with hot-reloading enabled for a quick feedback loop.
+The first start creates a local database and imports reverse-geocoding data. Stop with `Ctrl+C`. Postgres and Redis keep running; shut them down with `mise run deps-down`.
 
-You can access the web from `http://your-machine-ip:3000` or `http://localhost:3000` and access the server from the mobile app at `http://your-machine-ip:3000`
+The upstream all-in-Docker workflow is still available as `mise dev`. Prefer `mise host` unless you specifically need that setup.
 
-**Notes:**
-
-- The "web" development container runs with uid 1000. If that uid does not have read/write permissions on the mounted volumes, you may encounter errors
+You can access the web from `http://your-machine-ip:3000` or `http://localhost:3000` and access the server from the mobile app at `http://your-machine-ip:2283`.
 
 #### Connect web to a remote backend
 

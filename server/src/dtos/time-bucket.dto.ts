@@ -1,6 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import { BBoxSchema } from 'src/dtos/bbox.dto.js';
-import { AssetOrderBySchema, AssetOrderSchema, AssetVisibilitySchema } from 'src/enum.js';
+import { AssetOrderBySchema, AssetOrderSchema, AssetTypeSchema, AssetVisibilitySchema } from 'src/enum.js';
 import { stringToBool } from 'src/validation.js';
 import z from 'zod';
 
@@ -28,6 +28,9 @@ const TimeBucketQueryBaseSchema = z
     ),
     visibility: AssetVisibilitySchema.optional().describe(
       'Filter by asset visibility status (ARCHIVE, TIMELINE, HIDDEN, LOCKED)',
+    ),
+    assetType: AssetTypeSchema.optional().describe(
+      'Filter by asset type. When omitted, only images and videos are returned.',
     ),
     withCoordinates: stringToBool.optional().describe('Include location data in the response'),
     key: z.string().optional(),

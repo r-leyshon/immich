@@ -13,6 +13,10 @@
 
   let { isOwner, asset = $bindable() }: Props = $props();
 
+  const hasCoordinates = $derived(
+    typeof asset.exifInfo?.latitude === 'number' && typeof asset.exifInfo?.longitude === 'number',
+  );
+
   const onAction = async () => {
     const point = await modalManager.show(GeolocationPointPickerModal, { asset });
     if (!point) {
@@ -30,7 +34,7 @@
   };
 </script>
 
-{#if asset.exifInfo?.country}
+{#if hasCoordinates || asset.exifInfo?.country}
   <button
     type="button"
     class="flex w-full place-items-start justify-between gap-4 py-4 text-start"
@@ -54,6 +58,8 @@
           <div class="flex gap-2 text-sm">
             <p>{asset.exifInfo.country}</p>
           </div>
+        {:else if hasCoordinates}
+          <p class="text-sm">{asset.exifInfo?.latitude?.toFixed(5)}, {asset.exifInfo?.longitude?.toFixed(5)}</p>
         {/if}
       </div>
     </div>
@@ -64,7 +70,7 @@
       </div>
     {/if}
   </button>
-{:else if !asset.exifInfo?.city && isOwner}
+{:else if isOwner}
   <button
     type="button"
     class="flex w-full place-items-start justify-between gap-4 rounded-lg py-4 text-start hover:text-primary"

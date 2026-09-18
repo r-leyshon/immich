@@ -1,4 +1,4 @@
-import { getTimeBucket } from '@immich/sdk';
+import { getTimeBucket } from '$lib/utils/timeline-api';
 import { authManager } from '$lib/managers/auth-manager.svelte';
 import { toISOYearMonthUTC } from '$lib/utils/timeline-util';
 import { TimelineManager } from '../timeline-manager.svelte';

@@ -123,13 +123,19 @@ const uploadTests = [
     label: 'asset images',
     fieldName: UploadFieldName.ASSET_DATA,
     valid: validImages,
-    invalid: ['.html', '.xml'],
+    invalid: ['.xml'],
   },
   {
     label: 'asset videos',
     fieldName: UploadFieldName.ASSET_DATA,
     valid: validVideos,
-    invalid: ['.html', '.xml'],
+    invalid: ['.xml'],
+  },
+  {
+    label: 'asset documents',
+    fieldName: UploadFieldName.ASSET_DATA,
+    valid: ['.htm', '.html', '.md'],
+    invalid: ['.xml'],
   },
   {
     label: 'sidecar',

@@ -175,11 +175,14 @@ export class JobService extends BaseService {
           break;
         }
 
-        const jobs: JobItem[] = [
-          { name: JobName.SmartSearch, data: item.data },
-          { name: JobName.AssetDetectFaces, data: item.data },
-          { name: JobName.Ocr, data: item.data },
-        ];
+        const jobs: JobItem[] = [];
+        if (asset.type === AssetType.Image || asset.type === AssetType.Video) {
+          jobs.push(
+            { name: JobName.SmartSearch, data: item.data },
+            { name: JobName.AssetDetectFaces, data: item.data },
+            { name: JobName.Ocr, data: item.data },
+          );
+        }
 
         if (asset.type === AssetType.Video) {
           jobs.push({ name: JobName.AssetEncodeVideo, data: item.data });

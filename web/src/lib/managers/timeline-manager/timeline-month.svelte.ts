@@ -1,4 +1,4 @@
-import { AssetOrder, AssetOrderBy, type TimeBucketAssetResponseDto } from '@immich/sdk';
+import { AssetOrder, AssetOrderBy, AssetTypeEnum, type TimeBucketAssetResponseDto } from '@immich/sdk';
 import { t } from 'svelte-i18n';
 import { SvelteSet } from 'svelte/reactivity';
 import { get } from 'svelte/store';
@@ -180,6 +180,8 @@ export class TimelineMonth {
         bucketAssets.localOffsetHours[i],
       );
 
+      const isImage = bucketAssets.isImage[i];
+      const assetType = this.timelineManager.getAssetType();
       const timelineAsset: TimelineAsset = {
         city: bucketAssets.city?.[i] ?? null,
         country: bucketAssets.country?.[i] ?? null,
@@ -187,9 +189,9 @@ export class TimelineMonth {
         id: bucketAssets.id[i],
         visibility: bucketAssets.visibility[i],
         isFavorite: bucketAssets.isFavorite[i],
-        isImage: bucketAssets.isImage[i],
+        isImage,
         isTrashed: bucketAssets.isTrashed[i],
-        isVideo: !bucketAssets.isImage[i],
+        isVideo: !isImage && assetType !== AssetTypeEnum.Other && assetType !== AssetTypeEnum.Audio,
         livePhotoVideoId: bucketAssets.livePhotoVideoId[i],
         localDateTime,
         createdAt: fromISODateTimeUTC(bucketAssets.createdAt[i]).toLocal().toObject(),

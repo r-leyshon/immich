@@ -187,6 +187,60 @@ describe(MetadataService.name, () => {
       expect(mocks.asset.update).not.toHaveBeenCalled();
     });
 
+    it('should geocode markdown itineraries onto the map', async () => {
+      const asset = AssetFactory.create({
+        type: AssetType.Other,
+        originalFileName: 'Kos Road Trip Itinerary.md',
+        originalPath: '/data/upload/itinerary.md',
+      });
+      mocks.assetJob.getForMetadataExtraction.mockResolvedValue(getForMetadataExtraction(asset));
+      mocks.storage.readFile.mockResolvedValue(
+        Buffer.from(`## Route\n<iframe src="https://maps.google.com/maps?q=Roman+Odeon+of+Kos"></iframe>\n`),
+      );
+      mocks.search.searchPlaces.mockResolvedValue([]);
+      mocks.map.forwardGeocode.mockResolvedValue({
+        latitude: 36.893,
+        longitude: 27.288,
+        name: 'Roman Odeon of Kos',
+        city: 'Kos',
+        state: 'South Aegean',
+        country: 'Greece',
+      });
+      mocks.map.reverseGeocode.mockResolvedValue({ city: 'Kos', state: 'South Aegean', country: 'Greece' });
+      mocks.asset.getForMetadataExtractionTags.mockResolvedValue({ tags: [] });
+
+      await sut.handleMetadataExtraction({ id: asset.id, source: 'upload' });
+
+      expect(mocks.metadata.readTags).not.toHaveBeenCalled();
+      expect(mocks.asset.upsertExif).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exif: expect.objectContaining({
+            latitude: 36.893,
+            longitude: 27.288,
+            city: 'Kos',
+            country: 'Greece',
+            description: 'Kos Road Trip Itinerary',
+          }),
+        }),
+      );
+      expect(mocks.asset.upsertMetadata).toHaveBeenCalledWith(
+        asset.id,
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: 'itinerary',
+            value: expect.objectContaining({
+              title: 'Kos Road Trip Itinerary',
+              stops: [expect.objectContaining({ name: 'Roman Odeon of Kos', lat: 36.893, lon: 27.288 })],
+            }),
+          }),
+        ]),
+      );
+      expect(mocks.job.queue).toHaveBeenCalledWith({
+        name: JobName.AssetGenerateThumbnails,
+        data: { id: asset.id },
+      });
+    });
+
     it('should handle a date in a sidecar file', async () => {
       const originalDate = new Date('2023-11-21T16:13:17.517Z');
       const sidecarDate = new Date('2022-01-01T00:00:00.000Z');

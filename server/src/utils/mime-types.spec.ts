@@ -255,6 +255,22 @@ describe('mimeTypes', () => {
     }
   });
 
+  describe('document', () => {
+    it('should identify markdown as a document asset', () => {
+      expect(mimeTypes.isDocument('Kos Road Trip Itinerary.md')).toBe(true);
+      expect(mimeTypes.isAsset('itinerary.md')).toBe(true);
+      expect(mimeTypes.assetType('itinerary.md')).toBe('OTHER');
+      expect(mimeTypes.lookup('itinerary.md')).toBe('text/markdown');
+    });
+
+    it('should identify html as a document asset', () => {
+      expect(mimeTypes.isDocument('Kos Road Trip Itinerary.html')).toBe(true);
+      expect(mimeTypes.isAsset('itinerary.html')).toBe(true);
+      expect(mimeTypes.assetType('itinerary.html')).toBe('OTHER');
+      expect(mimeTypes.lookup('itinerary.html')).toBe('text/html');
+    });
+  });
+
   describe('raw', () => {
     it('should contain only lowercase mime types', () => {
       const keys = Object.keys(mimeTypes.raw);

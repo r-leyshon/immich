@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ContainerDirectoryItem, ExifDateTime, Tags } from 'exiftool-vendored';
+import isoCountries from 'i18n-iso-countries';
 import { Insertable } from 'kysely';
 import { isUndefined, omitBy, pick } from 'lodash-es';
 import { DateTime, Duration } from 'luxon';
@@ -33,6 +34,13 @@ import type { JobOf } from 'src/types.js';
 import { getAssetFiles } from 'src/utils/asset.util.js';
 import { isAssetChecksumConstraint } from 'src/utils/database.js';
 import { mergeTimeZone } from 'src/utils/date.js';
+import {
+  extractItineraryStops,
+  extractItineraryTitle,
+  ITINERARY_METADATA_KEY,
+  parseItineraryFrontmatter,
+  type GeocodedItineraryStop,
+} from 'src/utils/itinerary.js';
 import { mimeTypes } from 'src/utils/mime-types.js';
 import { batched, isFaceImportEnabled } from 'src/utils/misc.js';
 import { upsertTags } from 'src/utils/tag.js';
@@ -237,6 +245,11 @@ export class MetadataService extends BaseService {
       return;
     }
 
+    if (mimeTypes.isDocument(asset.originalFileName) || mimeTypes.isDocument(asset.originalPath)) {
+      await this.handleDocumentMetadata(asset, data);
+      return;
+    }
+
     const [exifResult, stats] = await Promise.all([
       this.getExifTags(asset),
       this.storageRepository.stat(asset.originalPath),
@@ -407,6 +420,113 @@ export class MetadataService extends BaseService {
       userId: asset.ownerId,
       source: data.source,
     });
+  }
+
+  private async handleDocumentMetadata(
+    asset: { id: string; ownerId: string; originalPath: string; originalFileName: string; fileCreatedAt: Date },
+    data: JobOf<JobName.AssetExtractMetadata>,
+  ) {
+    const stats = await this.storageRepository.stat(asset.originalPath);
+    const markdown = (await this.storageRepository.readFile(asset.originalPath)).toString('utf8');
+    const frontmatter = parseItineraryFrontmatter(markdown);
+    const title = extractItineraryTitle(markdown, asset.originalFileName);
+    const queries = extractItineraryStops(markdown);
+
+    const stops: GeocodedItineraryStop[] = [];
+    for (const stop of queries) {
+      const geocoded = await this.geocodeItineraryStop(stop.query);
+      if (!geocoded) {
+        continue;
+      }
+      stops.push({ ...stop, ...geocoded });
+    }
+
+    const latitude = stops.length > 0 ? stops.reduce((sum, stop) => sum + stop.lat, 0) / stops.length : null;
+    const longitude = stops.length > 0 ? stops.reduce((sum, stop) => sum + stop.lon, 0) / stops.length : null;
+
+    let geo = { country: null as string | null, state: null as string | null, city: null as string | null };
+    if (latitude !== null && longitude !== null) {
+      geo = await this.mapRepository.reverseGeocode({ latitude, longitude });
+    }
+
+    let dateTimeOriginal = asset.fileCreatedAt;
+    if (frontmatter.created) {
+      const parsed = DateTime.fromISO(frontmatter.created, { zone: 'utc' });
+      if (parsed.isValid) {
+        dateTimeOriginal = parsed.toJSDate();
+      }
+    }
+
+    const uploadedAt = new Date();
+    await this.assetRepository.update({
+      id: asset.id,
+      localDateTime: uploadedAt,
+      fileCreatedAt: uploadedAt,
+      fileModifiedAt: stats.mtime,
+    });
+
+    await this.assetRepository.upsertExif({
+      exif: {
+        assetId: asset.id,
+        dateTimeOriginal,
+        modifyDate: stats.mtime,
+        fileSizeInByte: stats.size,
+        latitude,
+        longitude,
+        country: geo.country,
+        state: geo.state,
+        city: geo.city ?? stops[0]?.city ?? null,
+        description: title,
+        tags: frontmatter.tags.length > 0 ? frontmatter.tags : null,
+      },
+      lockedPropertiesBehavior: 'skip',
+    });
+
+    if (stops.length > 0) {
+      await this.assetRepository.upsertMetadata(asset.id, [
+        {
+          key: ITINERARY_METADATA_KEY,
+          value: { title, stops },
+        },
+      ]);
+    }
+
+    await this.applyTagList(asset);
+    await this.assetRepository.upsertJobStatus({ assetId: asset.id, metadataExtractedAt: new Date() });
+    await this.eventRepository.emit('AssetMetadataExtracted', {
+      assetId: asset.id,
+      userId: asset.ownerId,
+      source: data.source,
+    });
+    await this.jobRepository.queue({ name: JobName.AssetGenerateThumbnails, data: { id: asset.id } });
+  }
+
+  private async geocodeItineraryStop(query: string) {
+    const local = (await this.searchRepository.searchPlaces(query)) ?? [];
+    const exact = local.find((place) => place.name.toLowerCase() === query.toLowerCase());
+    const localMatch = exact ?? (query.split(/\s+/).length <= 2 ? local[0] : undefined);
+    if (localMatch) {
+      return {
+        lat: localMatch.latitude,
+        lon: localMatch.longitude,
+        city: localMatch.name,
+        state: localMatch.admin1Name,
+        country: isoCountries.getName(localMatch.countryCode, 'en') ?? null,
+      };
+    }
+
+    const remote = await this.mapRepository.forwardGeocode(query);
+    if (!remote) {
+      return null;
+    }
+
+    return {
+      lat: remote.latitude,
+      lon: remote.longitude,
+      city: remote.city,
+      state: remote.state,
+      country: remote.country,
+    };
   }
 
   @OnJob({ name: JobName.SidecarQueueAll, queue: QueueName.Sidecar })

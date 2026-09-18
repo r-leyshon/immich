@@ -213,7 +213,7 @@ export const getAssetActions = ($t: MessageFormatter, asset: AssetResponseDto & 
   const Info: ActionItem = {
     title: $t('info'),
     icon: mdiInformationOutline,
-    $if: () => asset.hasMetadata,
+    $if: () => asset.hasMetadata || asset.type === AssetTypeEnum.Other,
     onAction: () => assetViewerManager.toggleDetailPanel(),
     shortcuts: { key: 'i' },
   };

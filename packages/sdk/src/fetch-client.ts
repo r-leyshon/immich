@@ -954,8 +954,12 @@ export type MapMarkerResponseDto = {
     lat: number;
     /** Longitude */
     lon: number;
+    /** Original file name */
+    originalFileName?: string;
     /** State/Province name */
     state: string | null;
+    /** Asset type */
+    type?: string;
 };
 export type UpdateAlbumUserDto = {
     role: AlbumUserRole;
@@ -7269,8 +7273,9 @@ export function tagAssets({ id, bulkIdsDto }: {
 /**
  * Get time bucket
  */
-export function getTimeBucket({ albumId, bbox, isFavorite, isTrashed, key, order, orderBy, personId, slug, tagId, timeBucket, userId, visibility, withCoordinates, withPartners, withStacked }: {
+export function getTimeBucket({ albumId, assetType, bbox, isFavorite, isTrashed, key, order, orderBy, personId, slug, tagId, timeBucket, userId, visibility, withCoordinates, withPartners, withStacked }: {
     albumId?: string;
+    assetType?: AssetTypeEnum;
     bbox?: string;
     isFavorite?: boolean;
     isTrashed?: boolean;
@@ -7292,6 +7297,7 @@ export function getTimeBucket({ albumId, bbox, isFavorite, isTrashed, key, order
         data: TimeBucketAssetResponseDto;
     }>(`/timeline/bucket${QS.query(QS.explode({
         albumId,
+        assetType,
         bbox,
         isFavorite,
         isTrashed,
@@ -7314,8 +7320,9 @@ export function getTimeBucket({ albumId, bbox, isFavorite, isTrashed, key, order
 /**
  * Get time buckets
  */
-export function getTimeBuckets({ albumId, bbox, isFavorite, isTrashed, key, order, orderBy, personId, slug, tagId, userId, visibility, withCoordinates, withPartners, withStacked }: {
+export function getTimeBuckets({ albumId, assetType, bbox, isFavorite, isTrashed, key, order, orderBy, personId, slug, tagId, userId, visibility, withCoordinates, withPartners, withStacked }: {
     albumId?: string;
+    assetType?: AssetTypeEnum;
     bbox?: string;
     isFavorite?: boolean;
     isTrashed?: boolean;
@@ -7336,6 +7343,7 @@ export function getTimeBuckets({ albumId, bbox, isFavorite, isTrashed, key, orde
         data: TimeBucketsResponseDto[];
     }>(`/timeline/buckets${QS.query(QS.explode({
         albumId,
+        assetType,
         bbox,
         isFavorite,
         isTrashed,

@@ -17,11 +17,13 @@
   import { serverConfigManager } from '$lib/managers/server-config-manager.svelte';
   import MapSettingsModal from '$lib/modals/MapSettingsModal.svelte';
   import { mapSettings } from '$lib/stores/preferences.store';
+  import { websocketEvents } from '$lib/stores/websocket';
   import { getAssetMediaUrl, handlePromiseError } from '$lib/utils';
+  import { isItineraryAsset } from '$lib/utils/itinerary-markdown';
   import { bboxFromFeatures, regionById, visitedFromMarkers } from '$lib/utils/visited-regions';
   import { getMapMarkers, type MapMarkerResponseDto } from '@immich/sdk';
   import { Alert, Container, Icon, modalManager, Text, Theme, themeManager } from '@immich/ui';
-  import { mdiCog, mdiImageMultiple, mdiMap, mdiMapMarker, mdiMapMarkerOff } from '@mdi/js';
+  import { mdiCog, mdiFileDocumentOutline, mdiImageMultiple, mdiMap, mdiMapMarker, mdiMapMarkerOff } from '@mdi/js';
   import type { Feature, GeoJsonProperties, Geometry, Point } from 'geojson';
   import { isEqual, omit } from 'lodash-es';
   import { DateTime, Duration } from 'luxon';
@@ -36,6 +38,7 @@
     type MapMouseEvent,
   } from 'maplibre-gl';
   import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { t } from 'svelte-i18n';
   import {
     AttributionControl,
@@ -123,7 +126,9 @@
   let map: Map | undefined = $state();
   let fittedForMarkers: MapMarkerResponseDto[] | undefined;
   let marker: Marker | null = null;
+  const failedMapPreviews = new SvelteSet<string>();
   let abortController: AbortController;
+  let unsubscribeUpload: (() => void) | undefined;
 
   const displayPhotoMarkers = $derived(
     simplified || clickable || useLocationPin || !showSettings || $mapSettings.showPhotoMarkers,
@@ -209,7 +214,17 @@
     }
   }
 
-  type FeaturePoint = Feature<Point, { id: string; city: string | null; state: string | null; country: string | null }>;
+  type FeaturePoint = Feature<
+    Point,
+    {
+      id: string;
+      city: string | null;
+      state: string | null;
+      country: string | null;
+      originalFileName: string | null;
+      type: string | null;
+    }
+  >;
 
   const asFeature = (marker: MapMarkerResponseDto): FeaturePoint => {
     return {
@@ -220,6 +235,8 @@
         city: marker.city,
         state: marker.state,
         country: marker.country,
+        originalFileName: marker.originalFileName ?? null,
+        type: marker.type ?? null,
       },
     };
   };
@@ -234,6 +251,8 @@
       city: featurePoint.properties.city,
       state: featurePoint.properties.state,
       country: featurePoint.properties.country,
+      originalFileName: featurePoint.properties.originalFileName ?? undefined,
+      type: featurePoint.properties.type ?? undefined,
     };
   };
 
@@ -308,6 +327,9 @@
   });
 
   onMount(async () => {
+    unsubscribeUpload = websocketEvents.on('on_upload_success', () => {
+      handlePromiseError(onAssetsChanged());
+    });
     if (!mapMarkers) {
       mapMarkers = await loadMapMarkers();
     }
@@ -323,6 +345,7 @@
   });
 
   onDestroy(() => {
+    unsubscribeUpload?.();
     abortController?.abort();
   });
 
@@ -596,6 +619,32 @@
           {#snippet children({ feature }: { feature: Feature })}
             {#if useLocationPin}
               <Icon icon={mdiMapMarker} size="50px" class="translate-y-[calc(5px-50%)] text-primary" />
+            {:else if isItineraryAsset({
+              originalFileName: feature.properties?.originalFileName,
+              type: feature.properties?.type,
+            })}
+              {@const markerId = String(feature.properties?.id ?? '')}
+              {@const itineraryAlt =
+                feature.properties?.city && feature.properties.country
+                  ? $t('map_marker_for_itinerary', {
+                      values: { city: feature.properties.city, country: feature.properties.country },
+                    })
+                  : $t('itinerary')}
+              <div
+                class="relative flex size-15 items-center justify-center overflow-hidden rounded-full border-2 border-immich-primary bg-[#e8eef7] shadow-lg transition-all duration-200 hover:scale-150 hover:border-immich-dark-primary"
+                title={itineraryAlt}
+              >
+                {#if markerId && !failedMapPreviews.has(markerId)}
+                  <img
+                    src={getAssetMediaUrl({ id: markerId })}
+                    class="size-full object-cover"
+                    alt={itineraryAlt}
+                    onerror={() => failedMapPreviews.add(markerId)}
+                  />
+                {:else}
+                  <Icon icon={mdiFileDocumentOutline} size="28" class="text-immich-primary" />
+                {/if}
+              </div>
             {:else}
               <img
                 src={getAssetMediaUrl({ id: feature.properties?.id })}

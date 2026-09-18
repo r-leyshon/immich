@@ -1,4 +1,5 @@
-import { AssetOrder, AssetOrderBy, getAssetInfo, getTimeBuckets, type AssetResponseDto } from '@immich/sdk';
+import { AssetOrder, AssetOrderBy, AssetTypeEnum, getAssetInfo, type AssetResponseDto } from '@immich/sdk';
+import { getTimeBuckets } from '$lib/utils/timeline-api';
 import { clamp, isEqual } from 'lodash-es';
 import { SvelteDate, SvelteSet } from 'svelte/reactivity';
 import { VirtualScrollManager } from '$lib/managers/VirtualScrollManager/VirtualScrollManager.svelte';
@@ -621,9 +622,28 @@ export class TimelineManager extends VirtualScrollManager {
       isMismatched(this.#options.visibility, asset.visibility) ||
       isMismatched(this.#options.isFavorite, asset.isFavorite) ||
       isMismatched(this.#options.isTrashed, asset.isTrashed) ||
+      this.#isAssetTypeMismatched(asset) ||
       (this.#options.tagId && asset.tags && !asset.tags.includes(this.#options.tagId)) ||
       (this.#options.assetFilter !== undefined && !this.#options.assetFilter.has(asset.id))
     );
+  }
+
+  #isAssetTypeMismatched(asset: TimelineAsset) {
+    switch (this.#options.assetType) {
+      case AssetTypeEnum.Other:
+      case AssetTypeEnum.Audio: {
+        return asset.isImage || asset.isVideo;
+      }
+      case AssetTypeEnum.Image: {
+        return !asset.isImage;
+      }
+      case AssetTypeEnum.Video: {
+        return !asset.isVideo;
+      }
+      default: {
+        return !asset.isImage && !asset.isVideo;
+      }
+    }
   }
 
   canInsertAssetFromLiveEvent(asset: TimelineAsset) {
@@ -637,6 +657,10 @@ export class TimelineManager extends VirtualScrollManager {
       return false;
     }
     return true;
+  }
+
+  getAssetType() {
+    return this.#options.assetType;
   }
 
   getAssetOrder() {

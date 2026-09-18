@@ -4,8 +4,10 @@ We appreciate every contribution, and we're happy about every new contributor. S
 
 ## Getting started
 
-To get you started quickly we have detailed guides for the dev setup on our [website](https://docs.immich.app/developer/setup). If you prefer, you can also use [Devcontainers](https://docs.immich.app/developer/devcontainers).
-There are also additional resources about Immich's architecture, database migrations, the use of OpenAPI, and more in our [developer documentation](https://docs.immich.app/developer/architecture).
+To run **this fork** locally, start Docker Desktop and run `mise host` from the repo root. See [Run locally](README.md#run-locally).
+
+Upstream Immich also has detailed guides for the [dev setup](https://docs.immich.app/developer/setup) and [Devcontainers](https://docs.immich.app/developer/devcontainers).
+There are also additional resources about Immich's architecture, database migrations, the use of OpenAPI, and more in the [developer documentation](https://docs.immich.app/developer/architecture).
 
 ## General
 

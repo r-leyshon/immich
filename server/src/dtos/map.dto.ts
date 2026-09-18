@@ -36,6 +36,8 @@ const MapMarkerResponseSchema = z
     city: z.string().nullable().describe('City name'),
     state: z.string().nullable().describe('State/Province name'),
     country: z.string().nullable().describe('Country name'),
+    originalFileName: z.string().optional().describe('Original file name'),
+    type: z.string().optional().describe('Asset type'),
   })
   .meta({ id: 'MapMarkerResponseDto' });
 

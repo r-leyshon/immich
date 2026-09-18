@@ -3,6 +3,7 @@ import { FACE_THUMBNAIL_SIZE } from 'src/constants.js';
 import { ImagePathOptions, StorageCore, ThumbnailPathEntity } from 'src/cores/storage.core.js';
 import { AssetFile } from 'src/database.js';
 import { OnEvent, OnJob } from 'src/decorators.js';
+import type { ArgOf } from 'src/repositories/event.repository.js';
 import { ConfigFFmpegDto, SystemConfig } from 'src/dtos/config.dto.js';
 import { AssetEditAction, CropParameters } from 'src/dtos/editing.dto.js';
 import {
@@ -41,6 +42,7 @@ import type {
 import { getAssetFile, getDimensions } from 'src/utils/asset.util.js';
 import { checkFaceVisibility, checkOcrVisibility } from 'src/utils/editor.js';
 import { BaseConfig, ThumbnailConfig } from 'src/utils/media.js';
+import { documentPreviewSvg, extractDocumentPreviewImage, extractItineraryTitle } from 'src/utils/itinerary.js';
 import { mimeTypes } from 'src/utils/mime-types.js';
 import { batched, clamp } from 'src/utils/misc.js';
 import { getOutputDimensions } from 'src/utils/transform.js';
@@ -63,6 +65,18 @@ export class MediaService extends BaseService {
   @OnEvent({ name: 'AppBootstrap', workers: [ImmichWorker.Microservices] })
   async onBootstrap() {
     this.videoInterfaces = await this.storageCore.getVideoInterfaces();
+  }
+
+  @OnEvent({ name: 'AssetMetadataExtracted' })
+  async onAssetMetadataExtracted({ assetId }: ArgOf<'AssetMetadataExtracted'>) {
+    const asset = await this.assetJobRepository.getForGenerateThumbnailJob(assetId);
+    if (!asset) {
+      return;
+    }
+    if (!mimeTypes.isDocument(asset.originalFileName) && !mimeTypes.isDocument(asset.originalPath)) {
+      return;
+    }
+    await this.handleGenerateThumbnails({ id: assetId });
   }
 
   @OnJob({ name: JobName.AssetGenerateThumbnailsQueueAll, queue: QueueName.ThumbnailGeneration })
@@ -212,6 +226,9 @@ export class MediaService extends BaseService {
     } else if (asset.type === AssetType.Image) {
       this.logger.verbose(`Thumbnail generation for image ${id} ${asset.originalPath}`);
       generated = await this.generateImageThumbnails(asset, config);
+    } else if (mimeTypes.isDocument(asset.originalFileName) || mimeTypes.isDocument(asset.originalPath)) {
+      this.logger.verbose(`Thumbnail generation for document ${id} ${asset.originalPath}`);
+      generated = await this.generateDocumentThumbnails(asset, config);
     } else {
       this.logger.warn(`Skipping thumbnail generation for asset ${id}: ${asset.type} is not an image or video`);
       return JobStatus.Skipped;
@@ -224,9 +241,15 @@ export class MediaService extends BaseService {
 
     await this.syncFiles(asset.files, generated.files);
     const thumbhash = editedGenerated?.thumbhash || generated.thumbhash;
+    const isDocument = mimeTypes.isDocument(asset.originalFileName) || mimeTypes.isDocument(asset.originalPath);
+    const dimensions = isDocument ? generated.fullsizeDimensions : undefined;
 
-    if (!asset.thumbhash || Buffer.compare(asset.thumbhash, thumbhash) !== 0) {
-      await this.assetRepository.update({ id: asset.id, thumbhash });
+    if (!asset.thumbhash || Buffer.compare(asset.thumbhash, thumbhash) !== 0 || dimensions) {
+      await this.assetRepository.update({
+        id: asset.id,
+        thumbhash,
+        ...(dimensions ? { width: dimensions.width, height: dimensions.height } : {}),
+      });
     }
 
     return JobStatus.Success;
@@ -386,6 +409,57 @@ export class MediaService extends BaseService {
       files: fullsizeFile ? [previewFile, thumbnailFile, fullsizeFile] : [previewFile, thumbnailFile],
       thumbhash: outputs[0] as Buffer,
       fullsizeDimensions,
+    };
+  }
+
+  private async generateDocumentThumbnails(asset: ThumbnailAsset, { image }: SystemConfig) {
+    const content = (await this.storageRepository.readFile(asset.originalPath)).toString('utf8');
+    const embedded = extractDocumentPreviewImage(content);
+    const source =
+      embedded ?? Buffer.from(documentPreviewSvg(extractItineraryTitle(content, asset.originalFileName)));
+    const { data, info, colorspace } = await this.decodeImage(
+      source,
+      { ...asset.exifInfo, orientation: null },
+      image.preview.size,
+    );
+
+    const previewFormat = image.preview.format;
+    const thumbnailFormat = image.thumbnail.format;
+    const previewFile = this.getImageFile(asset, {
+      fileType: AssetFileType.Preview,
+      format: previewFormat,
+      isEdited: false,
+      isProgressive: !!image.preview.progressive && previewFormat !== ImageFormat.Webp,
+      isTransparent: false,
+    });
+    const thumbnailFile = this.getImageFile(asset, {
+      fileType: AssetFileType.Thumbnail,
+      format: thumbnailFormat,
+      isEdited: false,
+      isProgressive: !!image.thumbnail.progressive && thumbnailFormat !== ImageFormat.Webp,
+      isTransparent: false,
+    });
+    this.storageCore.ensureFolders(previewFile.path);
+
+    const baseOptions = { colorspace, processInvalidImages: false, raw: info, edits: [] };
+    const [thumbhash] = await Promise.all([
+      this.mediaRepository.generateThumbhash(data, baseOptions),
+      this.mediaRepository.generateThumbnail(
+        data,
+        { ...image.thumbnail, ...baseOptions, format: thumbnailFormat },
+        thumbnailFile.path,
+      ),
+      this.mediaRepository.generateThumbnail(
+        data,
+        { ...image.preview, ...baseOptions, format: previewFormat },
+        previewFile.path,
+      ),
+    ]);
+
+    return {
+      files: [previewFile, thumbnailFile],
+      thumbhash,
+      fullsizeDimensions: { width: info.width, height: info.height },
     };
   }
 

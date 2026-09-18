@@ -27,7 +27,7 @@ class UploadManager {
   }
 
   getExtensions() {
-    return [...this.mediaTypes.image, ...this.mediaTypes.video];
+    return [...this.mediaTypes.image, ...this.mediaTypes.video, '.md', '.html', '.htm'];
   }
 }
 

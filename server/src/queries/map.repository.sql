@@ -3,6 +3,8 @@
 -- MapRepository.getAlbumMapMarkers
 select
   "id",
+  "asset"."originalFileName",
+  "asset"."type",
   "asset_exif"."latitude" as "lat",
   "asset_exif"."longitude" as "lon",
   "asset_exif"."city",
@@ -23,6 +25,8 @@ order by
 -- MapRepository.getMapMarkers
 select
   "id",
+  "asset"."originalFileName",
+  "asset"."type",
   "asset_exif"."latitude" as "lat",
   "asset_exif"."longitude" as "lon",
   "asset_exif"."city",

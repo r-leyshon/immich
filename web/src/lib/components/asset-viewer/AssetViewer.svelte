@@ -7,6 +7,7 @@
   import PreviousAssetAction from '$lib/components/asset-viewer/actions/PreviousAssetAction.svelte';
   import AssetViewerNavBar from '$lib/components/asset-viewer/AssetViewerNavBar.svelte';
   import { preloadManager } from '$lib/components/asset-viewer/PreloadManager.svelte';
+  import MarkdownViewer from '$lib/components/asset-viewer/MarkdownViewer.svelte';
   import OnEvents from '$lib/components/OnEvents.svelte';
   import { AssetAction, ProjectionType } from '$lib/constants';
   import { activityManager } from '$lib/managers/activity-manager.svelte';
@@ -28,6 +29,7 @@
   import { InvocationTracker } from '$lib/utils/invocationTracker';
   import { SlideshowHistory } from '$lib/utils/slideshow-history';
   import { toTimelineAsset } from '$lib/utils/timeline-util';
+  import { isMarkdownAsset } from '$lib/utils/itinerary-markdown';
   import {
     AssetTypeEnum,
     getAssetInfo,
@@ -432,6 +434,9 @@
     if (previewStackedAsset) {
       return previewStackedAsset.type === AssetTypeEnum.Image ? 'PhotoViewer' : 'StackVideoViewer';
     }
+    if (isMarkdownAsset(asset)) {
+      return 'MarkdownViewer';
+    }
     if (asset.type === AssetTypeEnum.Video) {
       return 'VideoViewer';
     }
@@ -466,11 +471,23 @@
 
   const { Tag, TagPeople } = $derived(getAssetActions($t, asset));
   const showDetailPanel = $derived(
-    asset.hasMetadata &&
+    (asset.hasMetadata || isMarkdownAsset(asset)) &&
       $slideshowState === SlideshowState.None &&
       assetViewerManager.isShowDetailPanel &&
       !assetViewerManager.isShowEditor,
   );
+
+  let openedDetailForAssetId = $state<string | null>(null);
+  $effect(() => {
+    if (viewerKind !== 'MarkdownViewer') {
+      return;
+    }
+    if (openedDetailForAssetId === asset.id) {
+      return;
+    }
+    openedDetailForAssetId = asset.id;
+    assetViewerManager.openDetailPanel();
+  });
 
   const onSwipe = (event: SwipeCustomEvent) => {
     if (assetViewerManager.zoom > 1) {
@@ -502,7 +519,10 @@
 
 <section
   id="immich-asset-viewer"
-  class="fixed inset-s-0 top-0 grid size-full grid-cols-4 grid-rows-[64px_1fr] overflow-hidden bg-black"
+  class={[
+    'fixed inset-s-0 top-0 grid size-full grid-cols-4 grid-rows-[64px_1fr] overflow-hidden',
+    viewerKind === 'MarkdownViewer' ? 'bg-light' : 'bg-black',
+  ]}
   use:focusTrap
   bind:this={assetViewerHtmlElement}
 >
@@ -514,6 +534,7 @@
         {album}
         {person}
         {stack}
+        appearance={viewerKind === 'MarkdownViewer' ? 'bar' : 'overlay'}
         preAction={handlePreAction}
         onAction={handleAction}
         {onUndoDelete}
@@ -545,7 +566,13 @@
   {/if}
 
   <!-- Asset Viewer -->
-  <div data-viewer-content class="relative z-[-1] col-span-4 col-start-1 row-span-full row-start-1">
+  <div
+    data-viewer-content
+    class={[
+      'relative z-[-1] col-span-4 col-start-1',
+      viewerKind === 'MarkdownViewer' ? 'row-start-2' : 'row-span-full row-start-1',
+    ]}
+  >
     {#if viewerKind === 'StackVideoViewer'}
       <VideoViewer
         asset={previewStackedAsset!}
@@ -575,6 +602,8 @@
       <ImagePanoramaViewer {asset} />
     {:else if viewerKind === 'CropArea'}
       <CropArea {asset} />
+    {:else if viewerKind === 'MarkdownViewer'}
+      <MarkdownViewer {asset} />
     {:else if viewerKind === 'PhotoViewer'}
       <PhotoViewer cursor={{ ...cursor, current: asset }} {sharedLink} {onSwipe} />
     {:else if viewerKind === 'VideoViewer'}
@@ -627,7 +656,7 @@
       transition:fly={{ duration: 150 }}
       id="detail-panel"
       class={[
-        'row-span-4 row-start-1 overflow-y-auto bg-light transition-all dark:border-l dark:border-s-immich-dark-gray',
+        'row-span-4 row-start-1 overflow-y-auto border-s border-gray-200 bg-light transition-all dark:border-s-immich-dark-gray',
         showDetailPanel ? 'w-90' : 'w-100',
       ]}
       translate="yes"

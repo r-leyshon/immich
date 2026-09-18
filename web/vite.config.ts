@@ -54,6 +54,7 @@ export default defineConfig({
   ],
   optimizeDeps: {
     entries: ['src/**/*.{svelte,ts,html}'],
+    exclude: ['@immich/sdk'],
   },
   test: {
     name: 'web:unit',

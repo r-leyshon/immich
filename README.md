@@ -49,10 +49,66 @@
 
 > [!NOTE]
 > You can find the main documentation, including installation guides, at https://immich.app/.
+> To run **this fork** on your machine, use [`mise host`](#run-locally).
+
+## Run locally
+
+To run this checkout locally, start Docker Desktop, then run **`mise host`**.
+
+That starts Postgres and Redis in Docker, then runs the server and web app on your machine. It is much faster than `mise dev`, which installs thousands of packages inside containers on first start.
+
+This is a **local** library. The first start creates a fresh database and imports reverse-geocoding data. It does not use Hetzner.
+
+1. Install [Docker](https://docs.docker.com/get-started/get-docker/) and [mise](https://mise.jdx.dev/installing-mise.html).
+2. First time only:
+
+```bash
+mise trust
+mise install
+cp docker/example.env docker/.env
+```
+
+If port 5432 is already in use (common if another Postgres is running), this fork uses **5433** via `DB_PORT` in `docker/.env`.
+
+3. Start:
+
+```bash
+mise host
+```
+
+Then open [http://localhost:3000](http://localhost:3000). The API is on [http://localhost:2283](http://localhost:2283).
+
+Stop with `Ctrl+C`. Postgres and Redis keep running; shut them down with:
+
+```bash
+mise run deps-down
+```
+
+### Full Docker stack
+
+`mise dev` is the upstream all-in-Docker workflow. The first start often takes 10+ minutes because the server and web containers each install ~2,400 packages. Prefer `mise host` unless you specifically need that setup.
+
+```bash
+mise x -- pnpm i
+mise dev
+```
+
+Rebuild containers with `mise run dev-update` (hyphen, not a space). Stop with `Ctrl+C` or `mise run dev-down`.
+
+To build production images from this checkout:
+
+```bash
+mise prod
+```
+
+That serves the app at [http://localhost:2283](http://localhost:2283).
+
+More detail is in the [developer setup guide](https://docs.immich.app/developer/setup).
 
 ## Links
 
 - [Documentation](https://docs.immich.app/)
+- [Run locally](#run-locally)
 - [About](https://docs.immich.app/overview/introduction)
 - [Installation](https://docs.immich.app/install/requirements)
 - [Roadmap](https://immich.app/roadmap)

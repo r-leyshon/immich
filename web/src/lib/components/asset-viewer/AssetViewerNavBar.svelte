@@ -48,6 +48,7 @@
     onRemoveFromAlbum?: (assetIds: string[]) => void;
     isPlayingOriginalVideo: boolean;
     setPlayOriginalVideo: (value: boolean) => void;
+    appearance?: 'overlay' | 'bar';
   }
 
   let {
@@ -62,6 +63,7 @@
     onRemoveFromAlbum,
     isPlayingOriginalVideo = false,
     setPlayOriginalVideo,
+    appearance = 'overlay',
   }: Props = $props();
 
   const isOwner = $derived(authManager.authenticated && asset.ownerId === authManager.user.id);
@@ -92,14 +94,22 @@
 <CommandPaletteDefaultProvider name={$t('assets')} actions={withoutIcons([Close, Cast, ...Object.values(Actions)])} />
 
 <div
-  class="flex h-16 place-items-center justify-between bg-linear-to-b from-black/40 px-3 drop-shadow-[0_0_1px_rgba(0,0,0,0.4)] transition-transform duration-200"
+  class={[
+    'flex h-16 place-items-center justify-between px-3 transition-transform duration-200',
+    appearance === 'overlay'
+      ? 'bg-linear-to-b from-black/40 drop-shadow-[0_0_1px_rgba(0,0,0,0.4)]'
+      : 'border-b border-gray-200 bg-light dark:border-immich-dark-gray',
+  ]}
 >
-  <div class="dark">
+  <div class:dark={appearance === 'overlay'}>
     <ActionButton action={Close} />
   </div>
 
   <div
-    class="dark -m-1 flex items-center gap-2 overflow-x-auto p-1 *:shrink-0"
+    class={[
+      '-m-1 flex items-center gap-2 overflow-x-auto p-1 *:shrink-0',
+      appearance === 'overlay' && 'dark',
+    ]}
     data-testid="asset-viewer-navbar-actions"
   >
     {#if assetViewerManager.isImageLoading}

@@ -10,6 +10,8 @@ client_secret_*.json
 
 docker/upload
 docker/library
+.local
+uploads
 uploads
 coverage
 

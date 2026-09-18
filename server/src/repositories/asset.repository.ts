@@ -796,6 +796,9 @@ export class AssetRepository {
           )
           .$if(options.isFavorite !== undefined, (qb) => qb.where('asset.isFavorite', '=', options.isFavorite!))
           .$if(!!options.assetType, (qb) => qb.where('asset.type', '=', options.assetType!))
+          .$if(!options.assetType, (qb) =>
+            qb.where('asset.type', 'in', [sql.lit(AssetType.Image), sql.lit(AssetType.Video)]),
+          )
           .$if(options.isDuplicate !== undefined, (qb) =>
             qb.where('asset.duplicateId', options.isDuplicate ? 'is not' : 'is', null),
           )
@@ -913,6 +916,9 @@ export class AssetRepository {
               .select('stack'),
           )
           .$if(!!options.assetType, (qb) => qb.where('asset.type', '=', options.assetType!))
+          .$if(!options.assetType, (qb) =>
+            qb.where('asset.type', 'in', [sql.lit(AssetType.Image), sql.lit(AssetType.Video)]),
+          )
           .$if(options.isDuplicate !== undefined, (qb) =>
             qb.where('asset.duplicateId', options.isDuplicate ? 'is not' : 'is', null),
           )
