@@ -104,24 +104,47 @@ export class EmailRepository {
     this.logger.setContext(EmailRepository.name);
   }
 
-  verifySmtp(options: SmtpOptions): Promise<true> {
+  async verifySmtp(options: SmtpOptions): Promise<true> {
     const transport = this.createTransport(options);
     try {
-      return transport.verify();
+      await transport.verify();
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `SMTP verify failed for ${options.host}:${options.port ?? 587}: ${toErrorMessage(error)}`,
+        toErrorStack(error),
+      );
+      throw error;
     } finally {
       transport.close();
     }
   }
 
   async renderEmail(request: EmailRenderRequest): Promise<{ html: string; text: string }> {
-    const component = this.render(request);
-    const html = await render(component, { pretty: false });
-    const text = await render(component, { plainText: true });
-    return { html, text };
+    try {
+      const component = this.render(request);
+      const html = await render(component, { pretty: false });
+      const text = await render(component, { plainText: true });
+      return { html, text };
+    } catch (error) {
+      this.logger.error(
+        `Failed to render email template ${request.template}: ${toErrorMessage(error)}`,
+        toErrorStack(error),
+      );
+      throw error;
+    }
   }
 
-  sendEmail({ to, from, subject, html, text, smtp, imageAttachments }: SendEmailOptions): Promise<SendEmailResponse> {
-    this.logger.debug(`Sending email to ${to} with subject: ${subject}`);
+  async sendEmail({
+    to,
+    from,
+    subject,
+    html,
+    text,
+    smtp,
+    imageAttachments,
+  }: SendEmailOptions): Promise<SendEmailResponse> {
+    this.logger.log(`Sending email to ${to} with subject: ${subject} via ${smtp.host}:${smtp.port ?? 587}`);
     const transport = this.createTransport(smtp);
 
     const attachments = imageAttachments?.map((attachment) => ({
@@ -131,7 +154,15 @@ export class EmailRepository {
     }));
 
     try {
-      return transport.sendMail({ to, from, subject, html, text, attachments });
+      const result = await transport.sendMail({ to, from, subject, html, text, attachments });
+      this.logger.debug(`SMTP accepted mail to ${to} with id ${result.messageId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `SMTP send failed for ${to} (${subject}) via ${smtp.host}:${smtp.port ?? 587}: ${toErrorMessage(error)}`,
+        toErrorStack(error),
+      );
+      throw error;
     } finally {
       transport.close();
     }
@@ -174,3 +205,7 @@ export class EmailRepository {
     });
   }
 }
+
+const toErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const toErrorStack = (error: unknown): string | undefined => (error instanceof Error ? error.stack : undefined);
+

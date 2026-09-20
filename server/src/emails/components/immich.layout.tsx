@@ -1,5 +1,6 @@
 import { Body, Container, Font, Head, Hr, Html, Img, Preview, Section, Tailwind, Text } from '@react-email/components';
 import * as React from 'react';
+import { emailTailwindPreset } from 'src/emails/components/email-tailwind-preset.js';
 import { ImmichFooter } from 'src/emails/components/footer.template.js';
 
 interface ImmichLayoutProps {
@@ -11,8 +12,7 @@ export const ImmichLayout = ({ children, preview }: ImmichLayoutProps) => (
   <Html>
     <Tailwind
       config={{
-        // eslint-disable-next-line @typescript-eslint/no-require-imports, unicorn/prefer-module
-        presets: [require('tailwindcss-preset-email')],
+        presets: [emailTailwindPreset],
         theme: {
           extend: {
             colors: {

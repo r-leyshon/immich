@@ -1,3 +1,4 @@
+import { emailTailwindPreset } from 'src/emails/components/email-tailwind-preset.js';
 import { EmailRenderRequest, EmailRepository, EmailTemplate } from 'src/repositories/email.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { automock } from 'test/utils.js';
@@ -8,6 +9,10 @@ describe(EmailRepository.name, () => {
   beforeEach(() => {
     // eslint-disable-next-line no-sparse-arrays
     sut = new EmailRepository(automock(LoggingRepository, { args: [, { getEnv: () => ({}) }], strict: false }));
+  });
+
+  it('loads the email tailwind preset without using the ESM-incompatible require()', () => {
+    expect(emailTailwindPreset).toEqual(expect.any(Object));
   });
 
   describe('renderEmail', () => {

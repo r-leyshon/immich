@@ -13,6 +13,7 @@ import {
   Text,
 } from '@react-email/components';
 import * as React from 'react';
+import { emailTailwindPreset } from 'src/emails/components/email-tailwind-preset.js';
 import { ImmichFooter } from './footer.template.js';
 
 interface FutoLayoutProps {
@@ -24,7 +25,7 @@ export const FutoLayout = ({ children, preview }: FutoLayoutProps) => (
   <Html>
     <Tailwind
       config={{
-        presets: [require('tailwindcss-preset-email')],
+        presets: [emailTailwindPreset],
         theme: {
           extend: {
             colors: {

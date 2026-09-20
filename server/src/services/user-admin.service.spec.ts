@@ -56,6 +56,51 @@ describe(UserAdminService.name, () => {
         clusterGroupId: expect.any(String),
       });
     });
+
+    it('should warn when notify is true but smtp is disabled', async () => {
+      mocks.user.getAdmin.mockResolvedValue(userStub.admin);
+      mocks.user.create.mockResolvedValue(userStub.user1);
+
+      await expect(
+        sut.create({
+          email: userStub.user1.email,
+          name: userStub.user1.name,
+          password: 'password',
+          notify: true,
+        }),
+      ).resolves.toEqual(mapUserAdmin(userStub.user1));
+
+      expect(mocks.logger.warn).toHaveBeenCalledWith(expect.stringContaining('SMTP is disabled'));
+      expect(mocks.event.emit).toHaveBeenCalledWith(
+        'UserSignup',
+        expect.objectContaining({ notify: true, id: userStub.user1.id }),
+      );
+    });
+
+    it('should still return the created user if queueing the welcome email fails', async () => {
+      mocks.user.getAdmin.mockResolvedValue(userStub.admin);
+      mocks.user.create.mockResolvedValue(userStub.user1);
+      mocks.event.emit.mockImplementation((event) => {
+        if (event === 'UserSignup') {
+          return Promise.reject(new Error('queue unavailable'));
+        }
+        return Promise.resolve();
+      });
+
+      await expect(
+        sut.create({
+          email: userStub.user1.email,
+          name: userStub.user1.name,
+          password: 'password',
+          notify: true,
+        }),
+      ).resolves.toEqual(mapUserAdmin(userStub.user1));
+
+      expect(mocks.logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('queueing the welcome email failed'),
+        expect.anything(),
+      );
+    });
   });
 
   describe('update', () => {

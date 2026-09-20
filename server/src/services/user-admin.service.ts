@@ -39,11 +39,32 @@ export class UserAdminService extends BaseService {
 
     const user = await this.createUser(userDto);
 
-    await this.eventRepository.emit('UserSignup', {
-      notify: !!notify,
-      id: user.id,
-      password: userDto.password,
-    });
+    if (notify) {
+      if (!config.notifications.smtp.enabled) {
+        this.logger.warn(
+          `Created user ${user.id} (${user.email}) with notify=true, but SMTP is disabled; welcome email will not be sent`,
+        );
+      } else {
+        this.logger.log(`Created user ${user.id} (${user.email}); queueing welcome email`);
+      }
+    } else {
+      this.logger.log(`Created user ${user.id} (${user.email}) without welcome email (notify=false)`);
+    }
+
+    try {
+      await this.eventRepository.emit('UserSignup', {
+        notify: !!notify,
+        id: user.id,
+        password: userDto.password,
+      });
+    } catch (error) {
+      this.logger.error(
+        `User ${user.id} (${user.email}) was created, but queueing the welcome email failed: ${
+          error instanceof Error ? error.message : error
+        }`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
 
     return mapUserAdmin(user);
   }

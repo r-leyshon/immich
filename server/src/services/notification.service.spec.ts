@@ -1,5 +1,5 @@
 import { AdminConfigDto, defaults, SystemConfig } from 'src/dtos/config.dto.js';
-import { AssetFileType, JobName, JobStatus, UserMetadataKey } from 'src/enum.js';
+import { AssetFileType, JobName, JobStatus, NotificationLevel, NotificationType, UserMetadataKey } from 'src/enum.js';
 import { NotificationService } from 'src/services/notification.service.js';
 import { AlbumFactory } from 'test/factories/album.factory.js';
 import { AssetFileFactory } from 'test/factories/asset-file.factory.js';
@@ -141,16 +141,27 @@ describe(NotificationService.name, () => {
 
   describe('onUserSignupEvent', () => {
     it('skips when notify is false', async () => {
-      await sut.onUserSignup({ id: '', notify: false });
+      await sut.onUserSignup({ id: 'user-id', notify: false });
       expect(mocks.job.queue).not.toHaveBeenCalled();
+      expect(mocks.logger.log).toHaveBeenCalledWith(expect.stringContaining('notify=false'));
     });
 
     it('should queue notify signup event if notify is true', async () => {
-      await sut.onUserSignup({ id: '', notify: true });
+      await sut.onUserSignup({ id: 'user-id', notify: true });
       expect(mocks.job.queue).toHaveBeenCalledWith({
         name: JobName.NotifyUserSignup,
-        data: { id: '', password: undefined },
+        data: { id: 'user-id', password: undefined },
       });
+    });
+
+    it('should log and rethrow when queueing the welcome email job fails', async () => {
+      mocks.job.queue.mockRejectedValue(new Error('redis down'));
+
+      await expect(sut.onUserSignup({ id: 'user-id', notify: true })).rejects.toThrow('redis down');
+      expect(mocks.logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to queue welcome email job for user user-id'),
+        expect.anything(),
+      );
     });
   });
 
@@ -252,19 +263,50 @@ describe(NotificationService.name, () => {
 
   describe('handleUserSignup', () => {
     it('should skip if user could not be found', async () => {
-      await expect(sut.handleUserSignup({ id: '' })).resolves.toBe(JobStatus.Skipped);
+      await expect(sut.handleUserSignup({ id: 'missing-user' })).resolves.toBe(JobStatus.Skipped);
+      expect(mocks.logger.warn).toHaveBeenCalledWith(expect.stringContaining('missing-user was not found'));
+      expect(mocks.email.renderEmail).not.toHaveBeenCalled();
+    });
+
+    it('should skip when smtp is disabled', async () => {
+      mocks.user.get.mockResolvedValue(userStub.admin);
+      mocks.systemMetadata.get.mockResolvedValue({ notifications: { smtp: { enabled: false } } });
+
+      await expect(sut.handleUserSignup({ id: userStub.admin.id })).resolves.toBe(JobStatus.Skipped);
+      expect(mocks.logger.warn).toHaveBeenCalledWith(expect.stringContaining('SMTP is disabled'));
+      expect(mocks.email.renderEmail).not.toHaveBeenCalled();
+      expect(mocks.job.queue).not.toHaveBeenCalled();
     });
 
     it('should be successful', async () => {
       mocks.user.get.mockResolvedValue(userStub.admin);
-      mocks.systemMetadata.get.mockResolvedValue({ server: {} });
+      mocks.systemMetadata.get.mockResolvedValue({
+        server: {},
+        notifications: { smtp: { enabled: true } },
+      });
       mocks.email.renderEmail.mockResolvedValue({ html: '', text: '' });
 
-      await expect(sut.handleUserSignup({ id: '' })).resolves.toBe(JobStatus.Success);
+      await expect(sut.handleUserSignup({ id: userStub.admin.id })).resolves.toBe(JobStatus.Success);
       expect(mocks.job.queue).toHaveBeenCalledWith({
         name: JobName.SendMail,
         data: expect.objectContaining({ subject: 'Welcome to Immich' }),
       });
+    });
+
+    it('should log and rethrow when rendering the welcome email fails', async () => {
+      mocks.user.get.mockResolvedValue(userStub.admin);
+      mocks.systemMetadata.get.mockResolvedValue({
+        server: {},
+        notifications: { smtp: { enabled: true } },
+      });
+      mocks.email.renderEmail.mockRejectedValue(new Error('require is not defined'));
+
+      await expect(sut.handleUserSignup({ id: userStub.admin.id })).rejects.toThrow('require is not defined');
+      expect(mocks.logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to prepare welcome email'),
+        expect.anything(),
+      );
+      expect(mocks.job.queue).not.toHaveBeenCalled();
     });
   });
 
@@ -544,7 +586,11 @@ describe(NotificationService.name, () => {
   describe('handleSendEmail', () => {
     it('should skip if smtp notifications are disabled', async () => {
       mocks.systemMetadata.get.mockResolvedValue({ notifications: { smtp: { enabled: false } } });
-      await expect(sut.handleSendEmail({ html: '', subject: '', text: '', to: '' })).resolves.toBe(JobStatus.Skipped);
+      await expect(
+        sut.handleSendEmail({ html: '', subject: 'Welcome to Immich', text: '', to: 'a@b.com' }),
+      ).resolves.toBe(JobStatus.Skipped);
+      expect(mocks.logger.warn).toHaveBeenCalledWith(expect.stringContaining('SMTP is disabled'));
+      expect(mocks.email.sendEmail).not.toHaveBeenCalled();
     });
 
     it('should send mail successfully', async () => {
@@ -565,6 +611,81 @@ describe(NotificationService.name, () => {
 
       await expect(sut.handleSendEmail({ html: '', subject: '', text: '', to: '' })).resolves.toBe(JobStatus.Success);
       expect(mocks.email.sendEmail).toHaveBeenCalledWith(expect.objectContaining({ replyTo: 'demo@immich.app' }));
+    });
+
+    it('should log and rethrow when smtp send fails', async () => {
+      mocks.systemMetadata.get.mockResolvedValue({
+        notifications: {
+          smtp: { enabled: true, from: 'test@immich.app', transport: { host: 'smtp.resend.com', port: 587 } },
+        },
+      });
+      mocks.email.sendEmail.mockRejectedValue(new Error('connection refused'));
+
+      await expect(
+        sut.handleSendEmail({ html: '', subject: 'Welcome to Immich', text: '', to: 'a@b.com' }),
+      ).rejects.toThrow('connection refused');
+      expect(mocks.logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to send email to a@b.com'),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('onJobError', () => {
+    it('should notify the admin of welcome email failures without logging the password', async () => {
+      mocks.user.getAdmin.mockResolvedValue(userStub.admin);
+      mocks.notification.create.mockResolvedValue({
+        ...notificationStub.albumEvent,
+        type: NotificationType.JobFailed,
+        level: NotificationLevel.Error,
+        title: 'Welcome email failed',
+      });
+
+      await sut.onJobError({
+        job: { name: JobName.NotifyUserSignup, data: { id: 'user-id', password: 'super-secret' } },
+        error: new Error('require is not defined'),
+      });
+
+      const logged = mocks.logger.error.mock.calls.flat().join(' ');
+      expect(logged).toContain('NotifyUserSignup');
+      expect(logged).toContain('[redacted]');
+      expect(logged).not.toContain('super-secret');
+      expect(mocks.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: userStub.admin.id,
+          type: NotificationType.JobFailed,
+          title: 'Welcome email failed',
+          description: expect.stringContaining('user-id'),
+        }),
+      );
+      expect(mocks.websocket.clientSend).toHaveBeenCalledWith('on_notification', userStub.admin.id, expect.anything());
+    });
+
+    it('should notify the admin of send-mail failures without logging the email body', async () => {
+      mocks.user.getAdmin.mockResolvedValue(userStub.admin);
+      mocks.notification.create.mockResolvedValue({
+        ...notificationStub.albumEvent,
+        type: NotificationType.JobFailed,
+        level: NotificationLevel.Error,
+        title: 'Email send failed',
+      });
+
+      await sut.onJobError({
+        job: {
+          name: JobName.SendMail,
+          data: { to: 'a@b.com', subject: 'Welcome to Immich', html: '<p>secret-body</p>', text: 'secret-body' },
+        },
+        error: new Error('smtp timeout'),
+      });
+
+      const logged = mocks.logger.error.mock.calls.flat().join(' ');
+      expect(logged).not.toContain('secret-body');
+      expect(mocks.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Email send failed',
+          description: expect.stringContaining('a@b.com'),
+        }),
+      );
     });
   });
 });

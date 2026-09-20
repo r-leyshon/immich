@@ -24,7 +24,7 @@ import {
 import { EmailTemplate } from 'src/repositories/email.repository.js';
 import type { ArgOf } from 'src/repositories/event.repository.js';
 import { BaseService } from 'src/services/base.service.js';
-import type { EmailImageAttachment, JobOf } from 'src/types.js';
+import type { EmailImageAttachment, JobItem, JobOf } from 'src/types.js';
 import { getFilenameExtension } from 'src/utils/file.js';
 import { getExternalDomain } from 'src/utils/misc.js';
 import { isEqualObject } from 'src/utils/object.js';
@@ -80,31 +80,38 @@ export class NotificationService extends BaseService {
 
   @OnEvent({ name: 'JobError' })
   async onJobError({ job, error }: ArgOf<'JobError'>) {
+    const errorMessage = toErrorMessage(error);
+    this.logger.error(
+      `Unable to run job handler (${job.name}): ${errorMessage}`,
+      toErrorStack(error),
+      serializeJobData(job.data),
+    );
+
     const admin = await this.userRepository.getAdmin();
     if (!admin) {
+      this.logger.warn(`Job ${job.name} failed but no admin user exists to notify`);
       return;
     }
 
-    this.logger.error(`Unable to run job handler (${job.name}): ${error}`, error?.stack, JSON.stringify(job.data));
+    if (!NOTIFY_ADMIN_ON_FAILURE.has(job.name)) {
+      return;
+    }
 
-    switch (job.name) {
-      case JobName.DatabaseBackup: {
-        const errorMessage = error instanceof Error ? error.message : error;
-        const item = await this.notificationRepository.create({
-          userId: admin.id,
-          type: NotificationType.JobFailed,
-          level: NotificationLevel.Error,
-          title: 'Job Failed',
-          description: `Job ${[job.name]} failed with error: ${errorMessage}`,
-        });
+    try {
+      const item = await this.notificationRepository.create({
+        userId: admin.id,
+        type: NotificationType.JobFailed,
+        level: NotificationLevel.Error,
+        title: jobFailureTitle(job.name),
+        description: jobFailureDescription(job, errorMessage),
+      });
 
-        this.websocketRepository.clientSend('on_notification', admin.id, mapNotification(item));
-        break;
-      }
-
-      default: {
-        return;
-      }
+      this.websocketRepository.clientSend('on_notification', admin.id, mapNotification(item));
+    } catch (notifyError) {
+      this.logger.error(
+        `Failed to create admin notification for job ${job.name}: ${toErrorMessage(notifyError)}`,
+        toErrorStack(notifyError),
+      );
     }
   }
 
@@ -205,9 +212,21 @@ export class NotificationService extends BaseService {
   }
 
   @OnEvent({ name: 'UserSignup' })
-  async onUserSignup({ notify, id, password: password }: ArgOf<'UserSignup'>) {
-    if (notify) {
+  async onUserSignup({ notify, id, password }: ArgOf<'UserSignup'>) {
+    if (!notify) {
+      this.logger.log(`Skipping welcome email for user ${id} because notify=false`);
+      return;
+    }
+
+    this.logger.log(`Queueing welcome email job for user ${id}`);
+    try {
       await this.jobRepository.queue({ name: JobName.NotifyUserSignup, data: { id, password } });
+    } catch (error) {
+      this.logger.error(
+        `Failed to queue welcome email job for user ${id}: ${toErrorMessage(error)}`,
+        toErrorStack(error),
+      );
+      throw error;
     }
   }
 
@@ -294,32 +313,49 @@ export class NotificationService extends BaseService {
   async handleUserSignup({ id, password }: JobOf<JobName.NotifyUserSignup>) {
     const user = await this.userRepository.get(id, { withDeleted: false });
     if (!user) {
+      this.logger.warn(`Skipping welcome email because user ${id} was not found`);
       return JobStatus.Skipped;
     }
 
-    const { server, templates } = await this.getConfig({ withCache: true });
-    const { html, text } = await this.emailRepository.renderEmail({
-      template: EmailTemplate.WELCOME,
-      data: {
-        baseUrl: getExternalDomain(server),
-        displayName: user.name,
-        username: user.email,
-        password,
-      },
-      customTemplate: templates.email.welcomeTemplate,
-    });
+    const { server, templates, notifications } = await this.getConfig({ withCache: true });
+    if (!notifications.smtp.enabled) {
+      this.logger.warn(`Skipping welcome email for user ${user.id} (${user.email}) because SMTP is disabled`);
+      return JobStatus.Skipped;
+    }
 
-    await this.jobRepository.queue({
-      name: JobName.SendMail,
-      data: {
-        to: user.email,
-        subject: 'Welcome to Immich',
-        html,
-        text,
-      },
-    });
+    this.logger.log(`Rendering welcome email for user ${user.id} (${user.email})`);
 
-    return JobStatus.Success;
+    try {
+      const { html, text } = await this.emailRepository.renderEmail({
+        template: EmailTemplate.WELCOME,
+        data: {
+          baseUrl: getExternalDomain(server),
+          displayName: user.name,
+          username: user.email,
+          password,
+        },
+        customTemplate: templates.email.welcomeTemplate,
+      });
+
+      await this.jobRepository.queue({
+        name: JobName.SendMail,
+        data: {
+          to: user.email,
+          subject: 'Welcome to Immich',
+          html,
+          text,
+        },
+      });
+
+      this.logger.log(`Queued SendMail for welcome email to ${user.email}`);
+      return JobStatus.Success;
+    } catch (error) {
+      this.logger.error(
+        `Failed to prepare welcome email for user ${user.id} (${user.email}): ${toErrorMessage(error)}`,
+        toErrorStack(error),
+      );
+      throw error;
+    }
   }
 
   @OnJob({ name: JobName.NotifyAlbumInvite, queue: QueueName.Notification })
@@ -430,26 +466,35 @@ export class NotificationService extends BaseService {
 
   @OnJob({ name: JobName.SendMail, queue: QueueName.Notification })
   async handleSendEmail(data: JobOf<JobName.SendMail>): Promise<JobStatus> {
+    const { to, subject, html, text: plain } = data;
     const { notifications } = await this.getConfig({ withCache: false });
     if (!notifications.smtp.enabled) {
+      this.logger.warn(`Skipping email to ${to} (${subject}) because SMTP is disabled`);
       return JobStatus.Skipped;
     }
 
-    const { to, subject, html, text: plain } = data;
-    const response = await this.emailRepository.sendEmail({
-      to,
-      subject,
-      html,
-      text: plain,
-      from: notifications.smtp.from,
-      replyTo: notifications.smtp.replyTo || notifications.smtp.from,
-      smtp: notifications.smtp.transport,
-      imageAttachments: data.imageAttachments,
-    });
+    try {
+      const response = await this.emailRepository.sendEmail({
+        to,
+        subject,
+        html,
+        text: plain,
+        from: notifications.smtp.from,
+        replyTo: notifications.smtp.replyTo || notifications.smtp.from,
+        smtp: notifications.smtp.transport,
+        imageAttachments: data.imageAttachments,
+      });
 
-    this.logger.log(`Sent mail with id: ${response.messageId} status: ${response.response}`);
-
-    return JobStatus.Success;
+      this.logger.log(`Sent mail to ${to} with id: ${response.messageId} status: ${response.response}`);
+      return JobStatus.Success;
+    } catch (error) {
+      const { host, port } = notifications.smtp.transport;
+      this.logger.error(
+        `Failed to send email to ${to} (${subject}) via ${host}:${port}: ${toErrorMessage(error)}`,
+        toErrorStack(error),
+      );
+      throw error;
+    }
   }
 
   private async getAlbumThumbnailAttachment(album: {
@@ -496,3 +541,45 @@ export class NotificationService extends BaseService {
     this.websocketRepository.clientSend('on_notification', userId, mapNotification(item));
   }
 }
+
+const SENSITIVE_JOB_KEYS = new Set(['password', 'html', 'text']);
+const NOTIFY_ADMIN_ON_FAILURE = new Set([JobName.DatabaseBackup, JobName.NotifyUserSignup, JobName.SendMail]);
+
+const toErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const toErrorStack = (error: unknown): string | undefined => (error instanceof Error ? error.stack : undefined);
+
+const serializeJobData = (data: unknown): string => {
+  try {
+    return JSON.stringify(data, (key, value) => (SENSITIVE_JOB_KEYS.has(key) && value ? '[redacted]' : value));
+  } catch {
+    return '[unserializable job data]';
+  }
+};
+
+const jobFailureTitle = (jobName: JobName): string => {
+  switch (jobName) {
+    case JobName.NotifyUserSignup: {
+      return 'Welcome email failed';
+    }
+    case JobName.SendMail: {
+      return 'Email send failed';
+    }
+    default: {
+      return 'Job Failed';
+    }
+  }
+};
+
+const jobFailureDescription = (job: JobItem, errorMessage: string): string => {
+  switch (job.name) {
+    case JobName.NotifyUserSignup: {
+      return `Welcome email for user ${job.data.id} could not be sent: ${errorMessage}`;
+    }
+    case JobName.SendMail: {
+      return `Email to ${job.data.to} (${job.data.subject}) could not be sent: ${errorMessage}`;
+    }
+    default: {
+      return `Job ${job.name} failed with error: ${errorMessage}`;
+    }
+  }
+};
