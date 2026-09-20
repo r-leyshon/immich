@@ -23,7 +23,16 @@
   import { bboxFromFeatures, regionById, visitedFromMarkers } from '$lib/utils/visited-regions';
   import { getMapMarkers, type MapMarkerResponseDto } from '@immich/sdk';
   import { Alert, Container, Icon, modalManager, Text, Theme, themeManager } from '@immich/ui';
-  import { mdiCog, mdiFileDocumentOutline, mdiImageMultiple, mdiMap, mdiMapMarker, mdiMapMarkerOff } from '@mdi/js';
+  import {
+    mdiCog,
+    mdiFileDocumentOutline,
+    mdiImageMultiple,
+    mdiMap,
+    mdiMapMarker,
+    mdiMapMarkerOff,
+    mdiVectorPolygon,
+    mdiVectorSquareRemove,
+  } from '@mdi/js';
   import type { Feature, GeoJsonProperties, Geometry, Point } from 'geojson';
   import { isEqual, omit } from 'lodash-es';
   import { DateTime, Duration } from 'luxon';
@@ -133,7 +142,7 @@
   const displayPhotoMarkers = $derived(
     simplified || clickable || useLocationPin || !showSettings || $mapSettings.showPhotoMarkers,
   );
-  const showVisitedRegions = $derived(!clickable);
+  const displayVisitedRegions = $derived(!clickable && (!showSettings || $mapSettings.showVisitedRegions));
 
   const visitedRegions = $derived(visitedFromMarkers(mapMarkers ?? []));
   const visitedRegionData = $derived({
@@ -301,8 +310,8 @@
     const settings = await modalManager.show(MapSettingsModal);
     if (settings) {
       const shouldUpdate = !isEqual(
-        omit(settings, 'allowDarkMode', 'showPhotoMarkers'),
-        omit($mapSettings, 'allowDarkMode', 'showPhotoMarkers'),
+        omit(settings, 'allowDarkMode', 'showPhotoMarkers', 'showVisitedRegions'),
+        omit($mapSettings, 'allowDarkMode', 'showPhotoMarkers', 'showVisitedRegions'),
       );
       $mapSettings = settings;
 
@@ -485,6 +494,10 @@
     $mapSettings = { ...$mapSettings, showPhotoMarkers: !$mapSettings.showPhotoMarkers };
   };
 
+  const toggleVisitedRegions = () => {
+    $mapSettings = { ...$mapSettings, showVisitedRegions: !$mapSettings.showVisitedRegions };
+  };
+
   const onAssetsChanged = async () => {
     mapMarkers = await loadMapMarkers();
   };
@@ -544,6 +557,14 @@
                 class="text-black/80"
               />
             </ControlButton>
+            <ControlButton onclick={toggleVisitedRegions}>
+              <Icon
+                title={$mapSettings.showVisitedRegions ? $t('hide_visited_regions') : $t('show_visited_regions')}
+                icon={$mapSettings.showVisitedRegions ? mdiVectorPolygon : mdiVectorSquareRemove}
+                size="70%"
+                class="text-black/80"
+              />
+            </ControlButton>
           </ControlGroup>
         </Control>
         <Control>
@@ -565,7 +586,7 @@
         </Control>
       {/if}
 
-      {#if showVisitedRegions}
+      {#if displayVisitedRegions}
         <GeoJSON id="visited-regions" data={visitedRegionData} generateId>
           <FillLayer
             hoverCursor="pointer"

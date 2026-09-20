@@ -42,6 +42,9 @@
     <Field label={$t('show_photo_markers')}>
       <Switch bind:checked={settings.showPhotoMarkers} />
     </Field>
+    <Field label={$t('show_visited_regions')}>
+      <Switch bind:checked={settings.showVisitedRegions} />
+    </Field>
 
     {#if customDateRange}
       <div in:fly={{ y: 10, duration: 200 }} class="flex flex-col gap-4">

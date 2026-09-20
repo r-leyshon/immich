@@ -2061,6 +2061,8 @@
   "show_person_options": "Show person options",
   "show_photo_markers": "Show photo locations",
   "hide_photo_markers": "Hide photo locations",
+  "show_visited_regions": "Show visited regions",
+  "hide_visited_regions": "Hide visited regions",
   "show_photos_in_area": "Show photos in this area",
   "show_progress_bar": "Show Progress Bar",
   "show_schema": "Show schema",
