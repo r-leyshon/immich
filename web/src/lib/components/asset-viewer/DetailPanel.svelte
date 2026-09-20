@@ -312,10 +312,10 @@
             <div class="flex flex-col items-center gap-1">
               <Text fontWeight="bold">{lat.toPrecision(6)}, {lon.toPrecision(6)}</Text>
               <Link
-                href="https://www.openstreetmap.org/?mlat={lat}&mlon={lon}&zoom=13#map=15/{lat}/{lon}"
+                href="https://www.google.com/maps/search/?api=1&query={lat},{lon}"
                 class="text-primary"
               >
-                {$t('open_in_openstreetmap')}
+                {$t('open_in_google_maps')}
               </Link>
             </div>
           {/snippet}
