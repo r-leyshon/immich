@@ -55,7 +55,7 @@
 
 To run this checkout locally, start Docker Desktop, then run **`mise host`**.
 
-That starts Postgres and Redis in Docker, then runs the server and web app on your machine. It is much faster than `mise dev`, which installs thousands of packages inside containers on first start.
+That starts Postgres and Redis in Docker, then runs the server and web app on your machine.
 
 This is a **local** library. The first start creates a fresh database and imports reverse-geocoding data. It does not use Hetzner.
 
@@ -83,25 +83,6 @@ Stop with `Ctrl+C`. Postgres and Redis keep running; shut them down with:
 ```bash
 mise run deps-down
 ```
-
-### Full Docker stack
-
-`mise dev` is the upstream all-in-Docker workflow. The first start often takes 10+ minutes because the server and web containers each install ~2,400 packages. Prefer `mise host` unless you specifically need that setup.
-
-```bash
-mise x -- pnpm i
-mise dev
-```
-
-Rebuild containers with `mise run dev-update` (hyphen, not a space). Stop with `Ctrl+C` or `mise run dev-down`.
-
-To build production images from this checkout:
-
-```bash
-mise prod
-```
-
-That serves the app at [http://localhost:2283](http://localhost:2283).
 
 More detail is in the [developer setup guide](https://docs.immich.app/developer/setup).
 
